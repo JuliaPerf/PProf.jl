@@ -2,3 +2,6 @@ name = "PProf"
 uuid = "e4faabce-9ead-11e9-39d9-4379958e3056"
 authors = ["Valentin Churavy <v.churavy@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+ProtoBuf = "3349acd9-ac6a-5e09-bcdb-63829b23a429"
