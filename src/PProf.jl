@@ -2,6 +2,23 @@ module PProf
 
 include(joinpath("..", "lib", "perftools.jl"))
 
+using OrderedCollections
+
+"""
+    enter!(dict::OrderedDict{T, Int}, key::T) where T
+
+Resolves from `key` to the index (zero-based) in the dict.
+Useful for the Strings table
+"""
+function enter!(dict::OrderedDict{T, Int}, key::T) where T
+    if haskey(dict, key)
+        return dict[key]
+    else
+        l = length(dict)
+        dict[key] = l
+        return l
+    end
+end
 
 using Profile
 using Base.StackTraces: StackFrame
