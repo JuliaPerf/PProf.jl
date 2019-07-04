@@ -1,5 +1,5 @@
 module PProf
 
-greet() = print("Hello World!")
+include(joinpath(@__DIR__, "..", "perftools.jl"))
 
 end # module
