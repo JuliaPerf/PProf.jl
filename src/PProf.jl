@@ -31,12 +31,6 @@ end
 using Base.StackTraces: lookup, StackFrame
 
 # TODO:
-# - from_c, two possible solutions:
-#   - Filter functions out during profile creation
-#   - PProfile has a `drop_frames` field that could be used to implement a filter
-# - Fill out PProfile various fields
-# - Fill out Function various fields
-# - Location: is_folded
 # - Mappings
 # - Understand what Sample.value[0] is supposed to be
 # - Check that we add Locations in the right order.
@@ -133,7 +127,7 @@ function pprof(;out::AbstractString = "profile.pb.gz",
             # Store the function in our functions dict
             funcProto = Function()
             funcProto.id = frame.pointer
-            if frame.linfo !== nothing
+            if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
                 linfo = frame.linfo::Core.MethodInstance
                 meth = linfo.def
                 file = Base.find_source_file(string(meth.file))
@@ -141,6 +135,7 @@ function pprof(;out::AbstractString = "profile.pb.gz",
                 funcProto.filename   = enter!(file)
                 funcProto.start_line = convert(Int64, meth.line)
             else
+                # frame.linfo either nothing or CodeInfo, either way fallback
                 file = Base.find_source_file(string(frame.file))
                 file_repr = file == nothing ? "nothing" : file
                 funcProto.name = enter!(string(frame.func))
