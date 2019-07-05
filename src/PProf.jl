@@ -37,8 +37,11 @@ function pprof(data::Array{UInt,1} = UInt[],litrace::Dict{UInt,Array{StackFrame,
      # Functions need a uid, we'll use the pointer for the method instance
      funcs = Dict{UInt64, perftools.profiles.Function}()
 
-     prof = perftools.profiles.Profile(sample = [], location = [], _function = [],
-                                       mapping = [], string_table = [])
+     prof = perftools.profiles.Profile(
+         sample_type = [perftools.profiles.ValueType(_type = enter!(string_table, "cpu"),
+                                                     unit = enter!(string_table, "nanoseconds"))],
+         sample = [], location = [], _function = [],
+         mapping = [], string_table = [])
 
 
     if length(data) == 0
@@ -48,13 +51,14 @@ function pprof(data::Array{UInt,1} = UInt[],litrace::Dict{UInt,Array{StackFrame,
     #data, litrace = Profile.flatten(data, litrace)
 
     sample = perftools.profiles.Sample()
+    sample = perftools.profiles.Sample(; location_id=[])
 
     lastwaszero = true
     for d in data
         if d == 0
             # End of sample
             push!(prof.sample, sample)
-            sample = perftools.profiles.Sample()
+            sample = perftools.profiles.Sample(; location_id=[])
 
             #if !lastwaszero
             #    write(formatter, "\n")
@@ -62,6 +66,8 @@ function pprof(data::Array{UInt,1} = UInt[],litrace::Dict{UInt,Array{StackFrame,
             lastwaszero = true
             continue
         end
+        push!(sample.location_id, d)
+
         frames = litrace[d]
         for frame in frames
             if !frame.from_c || from_c
