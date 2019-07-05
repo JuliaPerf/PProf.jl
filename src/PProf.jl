@@ -13,12 +13,12 @@ import .perftools.profiles: ValueType, Sample, Function,
 const PProfile = perftools.profiles.Profile
 
 """
-    enter!(dict::OrderedDict{T, Int}, key::T) where T
+    _enter!(dict::OrderedDict{T, Int}, key::T) where T
 
 Resolves from `key` to the index (zero-based) in the dict.
 Useful for the Strings table
 """
-function enter!(dict::OrderedDict{T, Int}, key::T) where T
+function _enter!(dict::OrderedDict{T, Int}, key::T) where T
     if haskey(dict, key)
         return dict[key]
     else
@@ -53,7 +53,7 @@ function pprof(data::Array{UInt,1} = UInt[],
     end
 
     string_table = OrderedDict{AbstractString, Int}()
-    enter!(string) = enter!(string_table, string)
+    enter!(string) = _enter!(string_table, string)
     ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
 
     # Setup:
@@ -102,6 +102,9 @@ function pprof(data::Array{UInt,1} = UInt[],
         location = Location(;id = d, address = d, line=[])
         frames = litrace[d]
         for frame in frames
+            # ip 0 is reserved
+            frame.pointer == 0 && continue
+
             push!(location.line, Line(function_id = frame.pointer, line = frame.line))
             # Known function
             haskey(funcs, frame.pointer) && continue
