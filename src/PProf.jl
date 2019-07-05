@@ -112,16 +112,21 @@ function pprof(data::Array{UInt,1} = UInt[],
             # Store the function in our functions dict
             funcProto = Function()
             funcProto.id = frame.pointer
-            funcProto.name = enter!(string(frame.func))
             if frame.linfo !== nothing
-                # TODO
-                # ... get full method name w/ types
+                linfo = frame.linfo::Core.MethodInstance
+                meth = linfo.def
+                file = Base.find_source_file(string(meth.file))
+                funcProto.name       = enter!(string(meth.module, ".", meth.name))
+                funcProto.filename   = enter!(file)
+                funcProto.start_line = convert(Int64, meth.line)
+            else
+                file = Base.find_source_file(string(frame.file))
+                file_repr = file == nothing ? "nothing" : file
+                funcProto.name = enter!(string(frame.func))
+                funcProto.filename = enter!(file_repr)
+                funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
             end
             funcProto.system_name = funcProto.name
-            file = Base.find_source_file(string(frame.file))
-            file_repr = file == nothing ? "nothing" : file
-            funcProto.filename = enter!(file_repr)
-            funcProto.start_line = frame.line # TODO: Get start_line properly
             funcs[frame.pointer] = funcProto
         end
         locs[d] = location
