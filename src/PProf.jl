@@ -1,5 +1,7 @@
 module PProf
 
+export pprof
+
 using Profile
 using ProtoBuf
 using OrderedCollections
