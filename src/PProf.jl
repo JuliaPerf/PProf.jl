@@ -28,7 +28,18 @@ end
 
 using Base.StackTraces: StackFrame
 
-# TODO implement from_c correctly, Locations that are purely from c need to be filtered out.
+# TODO:
+# - from_c, two possible solutions:
+#   - Filter functions out during profile creation
+#   - PProfile has a `drop_frames` field that could be used to implement a filter
+# - Fill out PProfile various fields
+# - Fill out Function various fields
+# - Location: is_folded
+# - Mappings
+# - Understand what Sample.value[0] is supposed to be
+# - Check that we add Locations in the right order.
+# - Tests!
+
 
 function pprof(data::Array{UInt,1} = UInt[],
                litrace::Dict{UInt,Array{StackFrame,1}} = Dict{UInt,Array{StackFrame,1}}();
@@ -40,17 +51,23 @@ function pprof(data::Array{UInt,1} = UInt[],
     end
 
     string_table = OrderedDict{AbstractString, Int}()
-    enter!(string_table, "")  # NOTE: pprof requires first entry to be ""
+    enter!(string) = enter!(string_table, string)
+    ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
 
+    # Setup:
+    enter!("")  # NOTE: pprof requires first entry to be ""
     # Functions need a uid, we'll use the pointer for the method instance
     funcs = Dict{UInt64, Function}()
     locs  = Dict{UInt64, Location}()
 
+    sample_type = [
+        ValueType!("events", "count"), # Mandatory
+        ValueType!("stack_depth", "count")
+    ]
+
     prof = PProfile(
-        sample_type = [ValueType(_type = enter!(string_table, "events"),
-                                 unit  = enter!(string_table, "count"))],
         sample = [], location = [], _function = [],
-        mapping = [], string_table = [])
+        mapping = [], string_table = [], sample_type = sample_type)
 
     location_id = Vector{eltype(data)}()
     lastwaszero = true
@@ -58,10 +75,18 @@ function pprof(data::Array{UInt,1} = UInt[],
     for d in data
         # d == 0 is the sentinel value for finishing a sample
         if d == 0
-            lastwaszero && continue
+            # Avoid creating empty samples
+            if lastwaszero
+                @assert length(location_id) == 0
+                continue
+            end
 
             # End of sample
-            push!(prof.sample, Sample(;location_id = location_id, value = [length(location_id)]))
+            value = [
+                1,                   # events
+                length(location_id), # stack_depth
+            ]
+            push!(prof.sample, Sample(;location_id = location_id, value = value))
             location_id = Vector{eltype(data)}()
             lastwaszero = true
             continue
@@ -69,16 +94,20 @@ function pprof(data::Array{UInt,1} = UInt[],
         lastwaszero = false
 
         push!(location_id, d)
-
+        # if we have already seen this location avoid entering it again
         haskey(locs, d) && continue
-        location = Location(;id = d, address = d, line=[]) # TODO address
+
+        location = Location(;id = d, address = d, line=[])
         frames = litrace[d]
         for frame in frames
+            push!(location.line, Line(function_id = frame.pointer, line = frame.line))
+            # Known function
             haskey(funcs, frame.pointer) && continue
+
             # Store the function in our functions dict
             funcProto = Function()
             funcProto.id = frame.pointer
-            funcProto.name = enter!(string_table, string(frame.func))
+            funcProto.name = enter!(string(frame.func))
             if frame.linfo !== nothing
                 # TODO
                 # ... get full method name w/ types
@@ -86,10 +115,9 @@ function pprof(data::Array{UInt,1} = UInt[],
             funcProto.system_name = funcProto.name
             file = Base.find_source_file(string(frame.file))
             file_repr = file == nothing ? "nothing" : file
-            funcProto.filename = enter!(string_table, file_repr)
-            funcProto.start_line = frame.line # is  this the right line?
+            funcProto.filename = enter!(file_repr)
+            funcProto.start_line = frame.line # TODO: Get start_line properly
             funcs[frame.pointer] = funcProto
-            push!(location.line, Line(function_id = funcProto.id, line = frame.line))
         end
         locs[d] = location
     end
