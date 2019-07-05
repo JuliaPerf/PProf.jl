@@ -48,12 +48,12 @@ using Base.StackTraces: lookup, StackFrame
 Fetches and converts `Profile` data to the `pprof` format.
 
 # Arguments:
-- `file::String`: Filename for output.
+- `out::String`: Filename for output.
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
 """
-function pprof(;file::AbstractString = "profile.pb.gz",
+function pprof(;out::AbstractString = "profile.pb.gz",
                 drop_frames::Union{Nothing, AbstractString} = nothing,
                 keep_frames::Union{Nothing, AbstractString} = nothing)
     data   = copy(Profile.fetch())
@@ -159,11 +159,11 @@ function pprof(;file::AbstractString = "profile.pb.gz",
     prof.location  = collect(values(locs))
 
     # Write to
-    open(file, "w") do io
+    open(out, "w") do io
         writeproto(io, prof)
     end
 
-    file
+    out
 end
 
 end # module
