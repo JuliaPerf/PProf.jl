@@ -28,7 +28,7 @@ function _enter!(dict::OrderedDict{T, Int}, key::T) where T
     end
 end
 
-using Base.StackTraces: StackFrame
+using Base.StackTraces: lookup, StackFrame
 
 # TODO:
 # - from_c, two possible solutions:
@@ -42,15 +42,22 @@ using Base.StackTraces: StackFrame
 # - Check that we add Locations in the right order.
 # - Tests!
 
+"""
+    pprof(; outfile = "profile.pb.gz", drop_frames = "", keep_frames = "")
 
-function pprof(data::Array{UInt,1} = UInt[],
-               litrace::Dict{UInt,Array{StackFrame,1}} = Dict{UInt,Array{StackFrame,1}}();
-               from_c = false,
-               outfile = "profile.pb.gz")
+Fetches and converts `Profile` data to the `pprof` format.
 
-    if length(data) == 0
-        (data, litrace) = Profile.retrieve()
-    end
+# Arguments:
+- `file::String`: Filename for output.
+- `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
+                 along with their successors.
+- `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
+"""
+function pprof(;file::AbstractString = "profile.pb.gz",
+                drop_frames::Union{Nothing, AbstractString} = nothing,
+                keep_frames::Union{Nothing, AbstractString} = nothing)
+    data   = copy(Profile.fetch())
+    period = ccall(:jl_profile_delay_nsec, UInt64, ())
 
     string_table = OrderedDict{AbstractString, Int}()
     enter!(string) = _enter!(string_table, string)
@@ -63,14 +70,24 @@ function pprof(data::Array{UInt,1} = UInt[],
     locs  = Dict{UInt64, Location}()
 
     sample_type = [
-        ValueType!("events", "count"), # Mandatory
+        ValueType!("events",      "count"), # Mandatory
         ValueType!("stack_depth", "count")
     ]
 
     prof = PProfile(
         sample = [], location = [], _function = [],
-        mapping = [], string_table = [], sample_type = sample_type)
+        mapping = [], string_table = [], sample_type = sample_type,
+        period = period, period_type = ValueType!("cpu", "ns")
+    )
 
+    if drop_frames !== nothing
+        prof.drop_frames = enter!(drop_frames)
+    end
+    if keep_frames !== nothing
+        prof.keep_frames = enter!(keep_frames)
+    end
+
+    # start decoding backtraces
     location_id = Vector{eltype(data)}()
     lastwaszero = true
 
@@ -105,8 +122,7 @@ function pprof(data::Array{UInt,1} = UInt[],
 
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
-        frames = litrace[ip]
-        for frame in frames
+        for frame in lookup(ip)
             # ip 0 is reserved
             frame.pointer == 0 && continue
 
@@ -143,11 +159,11 @@ function pprof(data::Array{UInt,1} = UInt[],
     prof.location  = collect(values(locs))
 
     # Write to
-    open(outfile, "w") do io
+    open(file, "w") do io
         writeproto(io, prof)
     end
 
-    outfile
+    file
 end
 
 end # module
