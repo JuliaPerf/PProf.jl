@@ -28,6 +28,8 @@ end
 
 using Base.StackTraces: StackFrame
 
+# TODO implement from_c correctly, Locations that are purely from c need to be filtered out.
+
 function pprof(data::Array{UInt,1} = UInt[],
                litrace::Dict{UInt,Array{StackFrame,1}} = Dict{UInt,Array{StackFrame,1}}();
                from_c = false,
@@ -72,25 +74,22 @@ function pprof(data::Array{UInt,1} = UInt[],
         location = Location(;id = d, address = d, line=[]) # TODO address
         frames = litrace[d]
         for frame in frames
-            if !frame.from_c || from_c
-                # Store the function in our functions dict
-                if !(frame.pointer in keys(funcs))
-                    funcProto = Function()
-                    funcProto.id = frame.pointer
-                    funcProto.name = enter!(string_table, string(frame.func))
-                    if frame.linfo !== nothing
-                        # TODO
-                        # ... get full method name w/ types
-                    end
-                    funcProto.system_name = funcProto.name
-                    file = Base.find_source_file(string(frame.file))
-                    file_repr = file == nothing ? "nothing" : file
-                    funcProto.filename = enter!(string_table, file_repr)
-                    funcProto.start_line = frame.line # is  this the right line?
-                    funcs[frame.pointer] = funcProto
-                    push!(location.line, Line(function_id = funcProto.id, line = frame.line))
-                end
+            haskey(funcs, frame.pointer) && continue
+            # Store the function in our functions dict
+            funcProto = Function()
+            funcProto.id = frame.pointer
+            funcProto.name = enter!(string_table, string(frame.func))
+            if frame.linfo !== nothing
+                # TODO
+                # ... get full method name w/ types
             end
+            funcProto.system_name = funcProto.name
+            file = Base.find_source_file(string(frame.file))
+            file_repr = file == nothing ? "nothing" : file
+            funcProto.filename = enter!(string_table, file_repr)
+            funcProto.start_line = frame.line # is  this the right line?
+            funcs[frame.pointer] = funcProto
+            push!(location.line, Line(function_id = funcProto.id, line = frame.line))
         end
         locs[d] = location
     end
