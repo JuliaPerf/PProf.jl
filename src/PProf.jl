@@ -97,12 +97,13 @@ function pprof(data::Array{UInt,1} = UInt[],
 
         # A backtrace consists of a set of IP (Instruction Pointers), each IP points
         # a single line of code and `litrace` has the necessary information to decode
-        # that IP to a specific frame or set of frames, if inlining occured.
+        # that IP to a specific frame (or set of frames, if inlining occured).
 
         push!(location_id, ip)
         # if we have already seen this IP avoid decoding it again
         haskey(locs, ip) && continue
 
+        # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
         frames = litrace[ip]
         for frame in frames
