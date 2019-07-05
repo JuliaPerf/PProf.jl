@@ -74,9 +74,9 @@ function pprof(data::Array{UInt,1} = UInt[],
     location_id = Vector{eltype(data)}()
     lastwaszero = true
 
-    for d in data
-        # d == 0 is the sentinel value for finishing a sample
-        if d == 0
+    for ip in data
+        # ip == 0x0 is the sentinel value for finishing a backtrace, therefore finising a sample
+        if ip == 0
             # Avoid creating empty samples
             if lastwaszero
                 @assert length(location_id) == 0
@@ -95,12 +95,16 @@ function pprof(data::Array{UInt,1} = UInt[],
         end
         lastwaszero = false
 
-        push!(location_id, d)
-        # if we have already seen this location avoid entering it again
-        haskey(locs, d) && continue
+        # A backtrace consists of a set of IP (Instruction Pointers), each IP points
+        # a single line of code and `litrace` has the necessary information to decode
+        # that IP to a specific frame or set of frames, if inlining occured.
 
-        location = Location(;id = d, address = d, line=[])
-        frames = litrace[d]
+        push!(location_id, ip)
+        # if we have already seen this IP avoid decoding it again
+        haskey(locs, ip) && continue
+
+        location = Location(;id = ip, address = ip, line=[])
+        frames = litrace[ip]
         for frame in frames
             # ip 0 is reserved
             frame.pointer == 0 && continue
@@ -129,7 +133,7 @@ function pprof(data::Array{UInt,1} = UInt[],
             funcProto.system_name = funcProto.name
             funcs[frame.pointer] = funcProto
         end
-        locs[d] = location
+        locs[ip] = location
     end
 
     # Build Profile
