@@ -1,9 +1,14 @@
 module PProf
 
-include(joinpath("..", "lib", "perftools.jl"))
-
+using Profile
 using ProtoBuf
 using OrderedCollections
+
+include(joinpath("..", "lib", "perftools.jl"))
+
+import .perftools.profiles: ValueType, Sample, Function,
+                            Location, Line
+const PProfile = perftools.profiles.Profile
 
 """
     enter!(dict::OrderedDict{T, Int}, key::T) where T
@@ -21,59 +26,56 @@ function enter!(dict::OrderedDict{T, Int}, key::T) where T
     end
 end
 
-using Profile
 using Base.StackTraces: StackFrame
 
-# =================
-# NOTES
-#
-function pprof(data::Array{UInt,1} = UInt[],litrace::Dict{UInt,Array{StackFrame,1}} = Dict{UInt,Array{StackFrame,1}}();
-                         from_c=false)
-
-
-     string_table = OrderedDict{AbstractString, Int}()
-     enter!(string_table, "")  # NOTE: Google requires first entry to be ""
-
-     # Functions need a uid, we'll use the pointer for the method instance
-     funcs = Dict{UInt64, perftools.profiles.Function}()
-
-     prof = perftools.profiles.Profile(
-         sample_type = [perftools.profiles.ValueType(_type = enter!(string_table, "cpu"),
-                                                     unit = enter!(string_table, "nanoseconds"))],
-         sample = [], location = [], _function = [],
-         mapping = [], string_table = [])
-
+function pprof(data::Array{UInt,1} = UInt[],
+               litrace::Dict{UInt,Array{StackFrame,1}} = Dict{UInt,Array{StackFrame,1}}();
+               from_c = false,
+               outfile = "profile.pb.gz")
 
     if length(data) == 0
         (data, litrace) = Profile.retrieve()
     end
 
-    #data, litrace = Profile.flatten(data, litrace)
+    string_table = OrderedDict{AbstractString, Int}()
+    enter!(string_table, "")  # NOTE: pprof requires first entry to be ""
 
-    sample = perftools.profiles.Sample()
-    sample = perftools.profiles.Sample(; location_id=[])
+    # Functions need a uid, we'll use the pointer for the method instance
+    funcs = Dict{UInt64, Function}()
+    locs  = Dict{UInt64, Location}()
 
+    prof = PProfile(
+        sample_type = [ValueType(_type = enter!(string_table, "events"),
+                                 unit  = enter!(string_table, "count"))],
+        sample = [], location = [], _function = [],
+        mapping = [], string_table = [])
+
+    location_id = Vector{eltype(data)}()
     lastwaszero = true
-    for d in data
-        if d == 0
-            # End of sample
-            push!(prof.sample, sample)
-            sample = perftools.profiles.Sample(; location_id=[])
 
-            #if !lastwaszero
-            #    write(formatter, "\n")
-            #end
+    for d in data
+        # d == 0 is the sentinel value for finishing a sample
+        if d == 0
+            lastwaszero && continue
+
+            # End of sample
+            push!(prof.sample, Sample(;location_id = location_id, value = [length(location_id)]))
+            location_id = Vector{eltype(data)}()
             lastwaszero = true
             continue
         end
-        push!(sample.location_id, d)
+        lastwaszero = false
 
+        push!(location_id, d)
+
+        haskey(locs, d) && continue
+        location = Location(;id = d, address = d, line=[]) # TODO address
         frames = litrace[d]
         for frame in frames
             if !frame.from_c || from_c
                 # Store the function in our functions dict
                 if !(frame.pointer in keys(funcs))
-                    funcProto = (funcs[frame.pointer] = perftools.profiles.Function())
+                    funcProto = Function()
                     funcProto.id = frame.pointer
                     funcProto.name = enter!(string_table, string(frame.func))
                     if frame.linfo !== nothing
@@ -84,32 +86,26 @@ function pprof(data::Array{UInt,1} = UInt[],litrace::Dict{UInt,Array{StackFrame,
                     file = Base.find_source_file(string(frame.file))
                     file_repr = file == nothing ? "nothing" : file
                     funcProto.filename = enter!(string_table, file_repr)
-                    funcProto.start_line = frame.line
+                    funcProto.start_line = frame.line # is  this the right line?
+                    funcs[frame.pointer] = funcProto
+                    push!(location.line, Line(function_id = funcProto.id, line = frame.line))
                 end
-
-                lastwaszero = false
             end
         end
+        locs[d] = location
     end
 
     # Build Profile
     prof.string_table = collect(keys(string_table))
     prof._function = collect(values(funcs))
+    prof.location  = collect(values(locs))
 
     # Write to
-    f = "out.proto"
-    open("out.proto", "w") do io
+    open(outfile, "w") do io
         writeproto(io, prof)
     end
 
-
-    @show prof
-    f
+    outfile
 end
-
-
-
-pprof()
-
 
 end # module
