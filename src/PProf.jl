@@ -43,11 +43,13 @@ Fetches and converts `Profile` data to the `pprof` format.
 
 # Arguments:
 - `out::String`: Filename for output.
+- `from_c::Bool`:  filter frames that come from from_c
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
 """
 function pprof(;out::AbstractString = "profile.pb.gz",
+                from_c::Bool = true,
                 drop_frames::Union{Nothing, AbstractString} = nothing,
                 keep_frames::Union{Nothing, AbstractString} = nothing)
     data   = copy(Profile.fetch())
@@ -63,6 +65,7 @@ function pprof(;out::AbstractString = "profile.pb.gz",
     # Functions need a uid, we'll use the pointer for the method instance
     funcs = Dict{UInt64, Function}()
     locs  = Dict{UInt64, Location}()
+    locs_from_c  = Dict{UInt64, Bool}()
 
     sample_type = [
         ValueType!("events",      "count"), # Mandatory
@@ -111,15 +114,20 @@ function pprof(;out::AbstractString = "profile.pb.gz",
         # a single line of code and `litrace` has the necessary information to decode
         # that IP to a specific frame (or set of frames, if inlining occured).
 
-        push!(location_id, ip)
         # if we have already seen this IP avoid decoding it again
-        haskey(locs, ip) && continue
+        if haskey(locs, ip) && (from_c || !locs_from_c[ip])
+            push!(location_id, ip)
+            continue
+        end
 
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
+        location_from_c = true
         for frame in lookup(ip)
             # ip 0 is reserved
             frame.pointer == 0 && continue
+            # if any of the frames is not from_c the entire location is not from_c
+            location_from_c &= frame.from_c
 
             push!(location.line, Line(function_id = frame.pointer, line = frame.line))
             # Known function
@@ -147,6 +155,7 @@ function pprof(;out::AbstractString = "profile.pb.gz",
             funcs[frame.pointer] = funcProto
         end
         locs[ip] = location
+        locs_from_c[ip] = location_from_c
     end
 
     # Build Profile
