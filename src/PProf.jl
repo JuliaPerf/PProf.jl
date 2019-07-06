@@ -55,6 +55,7 @@ function pprof(;out::AbstractString = "profile.pb.gz",
 
     string_table = OrderedDict{AbstractString, Int}()
     enter!(string) = _enter!(string_table, string)
+    enter!(::Nothing) = _enter!(string_table, "nothing")
     ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
 
     # Setup:
@@ -127,21 +128,21 @@ function pprof(;out::AbstractString = "profile.pb.gz",
             # Store the function in our functions dict
             funcProto = Function()
             funcProto.id = frame.pointer
+            file = nothing
             if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
                 linfo = frame.linfo::Core.MethodInstance
                 meth = linfo.def
-                file = Base.find_source_file(string(meth.file))
+                file = string(meth.file)
                 funcProto.name       = enter!(string(meth.module, ".", meth.name))
-                funcProto.filename   = enter!(file)
                 funcProto.start_line = convert(Int64, meth.line)
             else
                 # frame.linfo either nothing or CodeInfo, either way fallback
-                file = Base.find_source_file(string(frame.file))
-                file_repr = file == nothing ? "nothing" : file
+                file = string(frame.file)
                 funcProto.name = enter!(string(frame.func))
-                funcProto.filename = enter!(file_repr)
                 funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
             end
+            file = Base.find_source_file(file)
+            funcProto.filename   = enter!(file)
             funcProto.system_name = funcProto.name
             funcs[frame.pointer] = funcProto
         end
