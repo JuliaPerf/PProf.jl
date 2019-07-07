@@ -74,8 +74,9 @@ function pprof(;out::AbstractString = "profile.pb.gz",
 
     prof = PProfile(
         sample = [], location = [], _function = [],
-        mapping = [], string_table = [], sample_type = sample_type,
-        period = period, period_type = ValueType!("cpu", "ns")
+        mapping = [], string_table = [],
+        sample_type = sample_type, default_sample_type = 1, # events
+        period = period, period_type = ValueType!("cpu", "nanoseconds")
     )
 
     if drop_frames !== nothing
