@@ -19,6 +19,7 @@ end
 
     let x = 1
         @profile for _ in 1:10000; x += 1; end
+        sleep(2)
     end
 
     # Cache profile output to test that it isn't changed
@@ -56,49 +57,25 @@ end
     end
     let arr = []
         @profile foo(10000, 5, arr)
+        sleep(2)
     end
+    data = Profile.fetch()
 
     # Write a profile that includes C function frames
-    with_c = load_prof_proto(pprof(out=tempname(), from_c = true))
+    with_c = load_prof_proto(pprof(data, out=tempname(), from_c = true))
 
     # Write a profile that excludes C function frames
-    without_c = load_prof_proto(pprof(out=tempname(), from_c = false))
+    without_c = load_prof_proto(pprof(data, out=tempname(), from_c = false))
 
     # Test that C frames were excluded
-    @test_broken length(with_c.sample) == length(without_c.sample)
-    @test_broken length(with_c._function) > length(without_c._function)
-    @test_broken length(with_c.location) > length(without_c.location)
+    @test length(with_c.sample) == length(without_c.sample)
+    @test length(with_c.location) > length(without_c.location)
+    @test length(with_c._function) > length(without_c._function)
 end
 
-@testset "drop_frames" begin
-    Profile.clear()
-
-    function foo(n, a, out=[])
-        # make this expensive to ensure it's sampled
-        for i in 1:n
-            push!(out, i*a)
-        end
-    end
-    let arr = []
-        @profile foo(10000, 5, arr)
-    end
-
-    allframes = load_prof_proto(pprof(out=tempname()))
-
-    # SANITY CHECK
-    allframes2 = load_prof_proto(pprof(out=tempname()))
-
-    @test_broken length(allframes.sample) == length(allframes2.sample)
-    @test_broken length(allframes._function) == length(allframes2._function)
-    @test_broken length(allframes.location) == length(allframes2.location)
-
-    # Write a profile that dropped frames
-    droppedfoo = load_prof_proto(pprof(out=tempname(), drop_frames = "foo"))
-
-    # Test that C frames were excluded
-    @test_broken length(allframes.sample) == length(droppedfoo.sample)
-    @test_broken length(allframes._function) > length(droppedfoo._function)
-    @test_broken length(allframes.location) > length(droppedfoo.location)
+@testset "drop_frames/keep_frames" begin
+    @test load_prof_proto(pprof(out=tempname(), drop_frames = "foo")).drop_frames != 0
+    @test load_prof_proto(pprof(out=tempname(), keep_frames = "foo")).keep_frames != 0
 end
 
 end
