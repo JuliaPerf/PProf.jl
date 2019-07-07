@@ -116,8 +116,10 @@ function pprof(;out::AbstractString = "profile.pb.gz",
         # that IP to a specific frame (or set of frames, if inlining occured).
 
         # if we have already seen this IP avoid decoding it again
-        if haskey(locs, ip) && (from_c || !locs_from_c[ip])
-            push!(location_id, ip)
+        if haskey(locs, ip) 
+            if (from_c || !locs_from_c[ip])
+                push!(location_id, ip)
+            end
             continue
         end
 
