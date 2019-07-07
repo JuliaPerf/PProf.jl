@@ -1,4 +1,8 @@
 # PProf.jl
+
+[![Build Status](https://travis-ci.com/vchuravy/PProf.jl.svg?branch=master)](https://travis-ci.com/vchuravy/PProf.jl)
+
+
 *Sometimes I need a hammer, sometimes I need a drill, this is a hammer-drill*
 
 ```julia
