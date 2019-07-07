@@ -32,28 +32,35 @@ using Base.StackTraces: lookup, StackFrame
 
 # TODO:
 # - Mappings
-# - Understand what Sample.value[0] is supposed to be
-# - Check that we add Locations in the right order.
-# - Tests!
 
 """
-    pprof(; out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "")
+    pprof(data, period; out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "")
 
 Fetches and converts `Profile` data to the `pprof` format.
 
 # Arguments:
+- `data::Vector{UInt}`: The data provided by `Profile.fetch` [optional].
+- `period::UInt64`: The sampling period in nanoseconds [optional].
+
+# Keyword Arguments
 - `out::String`: Filename for output.
 - `from_c::Bool`: If `false`, exclude frames that come from from_c. Defaults to `true`.
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
 """
-function pprof(;out::AbstractString = "profile.pb.gz",
-                from_c::Bool = true,
-                drop_frames::Union{Nothing, AbstractString} = nothing,
-                keep_frames::Union{Nothing, AbstractString} = nothing)
-    data   = copy(Profile.fetch())
-    period = ccall(:jl_profile_delay_nsec, UInt64, ())
+function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
+               period::Union{Nothing, UInt64} = nothing;
+               out::AbstractString = "profile.pb.gz",
+               from_c::Bool = true,
+               drop_frames::Union{Nothing, AbstractString} = nothing,
+               keep_frames::Union{Nothing, AbstractString} = nothing)
+    if data === nothing
+        data = copy(Profile.fetch())
+    end
+    if period === nothing
+        period = ccall(:jl_profile_delay_nsec, UInt64, ())
+    end
 
     string_table = OrderedDict{AbstractString, Int}()
     enter!(string) = _enter!(string_table, string)
