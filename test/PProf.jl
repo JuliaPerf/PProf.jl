@@ -59,12 +59,13 @@ end
         @profile foo(10000, 5, arr)
         sleep(2)
     end
+    data = Profile.fetch()
 
     # Write a profile that includes C function frames
-    with_c = load_prof_proto(pprof(out=tempname(), from_c = true))
+    with_c = load_prof_proto(pprof(data, out=tempname(), from_c = true))
 
     # Write a profile that excludes C function frames
-    without_c = load_prof_proto(pprof(out=tempname(), from_c = false))
+    without_c = load_prof_proto(pprof(data, out=tempname(), from_c = false))
 
     # Test that C frames were excluded
     @test length(with_c.sample) == length(without_c.sample)
