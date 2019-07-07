@@ -37,13 +37,13 @@ using Base.StackTraces: lookup, StackFrame
 # - Tests!
 
 """
-    pprof(; outfile = "profile.pb.gz", drop_frames = "", keep_frames = "")
+    pprof(; out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "")
 
 Fetches and converts `Profile` data to the `pprof` format.
 
 # Arguments:
 - `out::String`: Filename for output.
-- `from_c::Bool`:  filter frames that come from from_c
+- `from_c::Bool`: If `false`, exclude frames that come from from_c. Defaults to `true`.
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.

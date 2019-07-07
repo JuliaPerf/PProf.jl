@@ -156,6 +156,7 @@ mutable struct Profile <: ProtoType
     # frames with Function.function_name fully matching the following
     # regexp will be kept, even if it matches drop_functions.
     keep_frames::Int64  # Index into string table.
+
     # The following fields are informational, do not affect
     # interpretation of results.
 
