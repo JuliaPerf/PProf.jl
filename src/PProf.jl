@@ -70,7 +70,10 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
     # Functions need a uid, we'll use the pointer for the method instance
+    seen_funcs = Set{UInt64}()
     funcs = Dict{UInt64, Function}()
+
+    seen_locs = Set{UInt64}()
     locs  = Dict{UInt64, Location}()
     locs_from_c  = Dict{UInt64, Bool}()
 
@@ -123,13 +126,14 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # that IP to a specific frame (or set of frames, if inlining occured).
 
         # if we have already seen this IP avoid decoding it again
-        if haskey(locs, ip)
+        if ip in seen_locs
             # Only keep C frames if from_c=true
             if (from_c || !locs_from_c[ip])
                 push!(location_id, ip)
             end
             continue
         end
+        push!(seen_locs, ip)
 
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
@@ -142,7 +146,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
             push!(location.line, Line(function_id = frame.pointer, line = frame.line))
             # Known function
-            haskey(funcs, frame.pointer) && continue
+            frame.pointer in seen_funcs && continue
+            push!(seen_funcs, frame.pointer)
 
             # Store the function in our functions dict
             funcProto = Function()
@@ -163,18 +168,22 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             file = Base.find_source_file(file)
             funcProto.filename   = enter!(file)
             funcProto.system_name = funcProto.name
-            funcs[frame.pointer] = funcProto
+            # Only keep C functions if from_c=true
+            if (from_c || !frame.from_c)
+                funcs[frame.pointer] = funcProto
+            end
         end
-        locs[ip] = location
         locs_from_c[ip] = location_from_c
         # Only keep C frames if from_c=true
         if (from_c || !location_from_c)
+            locs[ip] = location
             push!(location_id, ip)
         end
     end
 
     # Build Profile
     prof.string_table = collect(keys(string_table))
+    # If from_c=false funcs and locs should NOT contain C functions
     prof._function = collect(values(funcs))
     prof.location  = collect(values(locs))
 
