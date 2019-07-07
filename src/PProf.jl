@@ -157,6 +157,9 @@ function pprof(;out::AbstractString = "profile.pb.gz",
         end
         locs[ip] = location
         locs_from_c[ip] = location_from_c
+        if (from_c || !location_from_c)
+            push!(location_id, ip)
+        end
     end
 
     # Build Profile
