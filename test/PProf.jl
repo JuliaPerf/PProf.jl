@@ -11,7 +11,7 @@ const out = tempname()
 @testset "empty output" begin
     Profile.clear()
     # Function doesn't error if no Profile recorded
-    @test (pprof(out=out); true)
+    @test (pprof(out=out, web=false); true)
 end
 
 @testset "export basic profile" begin
@@ -26,7 +26,7 @@ end
     _prior_profile_output = Profile.retrieve()
 
     # Write the profile
-    pprof(out=out)
+    pprof(out=out, web=false)
 
     # Read the exported profile
     prof = open(io->readproto(io, PProf.perftools.profiles.Profile()), out, "r")
@@ -62,10 +62,10 @@ end
     data = Profile.fetch()
 
     # Write a profile that includes C function frames
-    with_c = load_prof_proto(pprof(data, out=tempname(), from_c = true))
+    with_c = load_prof_proto(pprof(data, out=tempname(), web=false, from_c = true))
 
     # Write a profile that excludes C function frames
-    without_c = load_prof_proto(pprof(data, out=tempname(), from_c = false))
+    without_c = load_prof_proto(pprof(data, out=tempname(), web=false, from_c = false))
 
     # Test that C frames were excluded
     @test length(with_c.sample) == length(without_c.sample)
@@ -74,8 +74,8 @@ end
 end
 
 @testset "drop_frames/keep_frames" begin
-    @test load_prof_proto(pprof(out=tempname(), drop_frames = "foo")).drop_frames != 0
-    @test load_prof_proto(pprof(out=tempname(), keep_frames = "foo")).keep_frames != 0
+    @test load_prof_proto(pprof(out=tempname(), web=false, drop_frames = "foo")).drop_frames != 0
+    @test load_prof_proto(pprof(out=tempname(), web=false, keep_frames = "foo")).keep_frames != 0
 end
 
 end
