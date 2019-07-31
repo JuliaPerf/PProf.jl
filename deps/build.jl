@@ -7,7 +7,7 @@ const verbose = "--verbose" in ARGS
 const prefix = Prefix(get([a for a in ARGS if a != "--verbose"], 1, joinpath(@__DIR__, "usr")))
 
 # Instantiate products:
-go_pprof = ExecutableProduct(prefix, "pprof", :go_pprof)
+go_pprof = ExecutableProduct(prefix, Sys.iswindows() ? "pprof.exe" : "pprof", :go_pprof)
 products = [go_pprof]
 
 # Download binaries from hosted location
@@ -37,11 +37,13 @@ if any(!satisfied(p; verbose=verbose) for p in products)
         # Download and install binaries
         url, tarball_hash = choose_download(download_info)
         install(url, tarball_hash; prefix=prefix, force=true, verbose=true)
-        # NHDALY MANUALLY ADDED THESE LINES TO HOOK UP THE BINARY
-        bin = mkpath(joinpath(prefix, "bin"))
-        dir = splitext(splitext(basename(url))[1])[1]
-        @show dir
-        cp(joinpath(prefix, dir, "pprof"), joinpath(bin, "pprof"))
+        # we need to move the unpacked binary from `prefix` to `prefix/bin`
+        dir        = splitext(splitext(basename(url))[1])[1]
+        destpath   = dirname(go_pprof.path)
+        binaryname = basename(go_pprof.path)
+
+        mkpath(destpath)
+        cp(joinpath(prefix, dir, binaryname), go_pprof.path)
     catch e
         if typeof(e) <: ArgumentError
             error("Your platform $(Sys.MACHINE) is not supported by this package!")
