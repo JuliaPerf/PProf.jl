@@ -32,3 +32,8 @@ For more usage examples see the pprof docs: https://github.com/google/pprof/blob
 
   Fetches and converts Profile data to the pprof format.
 ```
+
+## Google PProf Web View
+<img width=500px src="docs/graph.png" alt="graph"/>
+
+!["flamegraph"](docs/flamegraph.png)
