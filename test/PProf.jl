@@ -8,6 +8,13 @@ using ProtoBuf
 
 const out = tempname()
 
+function foo(n, a, out=[])
+    # make this expensive to ensure it's sampled
+    for i in 1:n
+        push!(out, i*a)
+    end
+end
+
 @testset "empty output" begin
     Profile.clear()
     # Function doesn't error if no Profile recorded
@@ -49,12 +56,6 @@ end
 @testset "with_c" begin
     Profile.clear()
 
-    function foo(n, a, out=[])
-        # make this expensive to ensure it's sampled
-        for i in 1:n
-            push!(out, i*a)
-        end
-    end
     let arr = []
         @profile foo(10000, 5, arr)
         sleep(2)
@@ -78,4 +79,55 @@ end
     @test load_prof_proto(pprof(out=tempname(), web=false, keep_frames = "foo")).keep_frames != 0
 end
 
+@testset "@pprof macro" begin
+    # let arr = []
+        @pprof foo(10000, 5, [])
+        # sleep(2)
+    # end
+    @test PProf.proc[] !== nothing
+    @test process_running(PProf.proc[])
+
+    PProf.kill()
+    @test PProf.proc[] === nothing
+
+    @test isfile("profile.pb.gz")
+    rm("profile.pb.gz")
 end
+
+@testset "subprocess refresh" begin
+
+    let arr = []
+        @pprof foo(10000, 5, arr)
+        sleep(2)
+    end
+
+    current_proc = PProf.proc[]
+    @test process_running(current_proc)
+
+    PProf.refresh()
+    sleep(2)
+
+    @test process_running(PProf.proc[])
+    @test process_exited(current_proc)
+end
+
+@testset "subprocess kill" begin
+
+    let arr = []
+        @pprof foo(10000, 5, arr)
+        sleep(2)
+    end
+
+    current_proc = PProf.proc[]
+    @test process_running(current_proc)
+
+    PProf.kill()
+    sleep(2)
+
+    @test process_exited(current_proc)
+    @test PProf.proc[] === nothing
+    @test isfile("profile.pb.gz")
+    rm("profile.pb.gz")
+end
+
+end # module
