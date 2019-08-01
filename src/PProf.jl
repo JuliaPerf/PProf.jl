@@ -27,16 +27,19 @@ import .perftools.profiles: ValueType, Sample, Function,
 const PProfile = perftools.profiles.Profile
 
 """
-    _enter!(dict::OrderedDict{T, Int}, key::T) where T
+    _enter!(dict::OrderedDict{T, Int64}, key::T) where T
 
 Resolves from `key` to the index (zero-based) in the dict.
 Useful for the Strings table
+
+NOTE: We must use Int64 throughout this package (regardless of system word-size) b/c the
+proto file specifies 64-bit integers.
 """
-function _enter!(dict::OrderedDict{T, Int}, key::T) where T
+function _enter!(dict::OrderedDict{T, Int64}, key::T) where T
     if haskey(dict, key)
         return dict[key]
     else
-        l = length(dict)
+        l = Int64(length(dict))
         dict[key] = l
         return l
     end
@@ -84,7 +87,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         period = ccall(:jl_profile_delay_nsec, UInt64, ())
     end
 
-    string_table = OrderedDict{AbstractString, Int}()
+    string_table = OrderedDict{AbstractString, Int64}()
     enter!(string) = _enter!(string_table, string)
     enter!(::Nothing) = _enter!(string_table, "nothing")
     ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
