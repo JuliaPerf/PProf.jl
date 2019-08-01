@@ -7,7 +7,7 @@ const verbose = "--verbose" in ARGS
 const prefix = Prefix(get([a for a in ARGS if a != "--verbose"], 1, joinpath(@__DIR__, "usr")))
 
 # Instantiate products:
-go_pprof = ExecutableProduct(prefix, "pprof", :go_pprof)
+go_pprof = ExecutableProduct(prefix, Sys.iswindows() ? "pprof.exe" : "pprof", :go_pprof)
 products = [go_pprof]
 
 # Download binaries from hosted location
@@ -27,8 +27,8 @@ download_info = Dict(
 
     BinaryProvider.MacOS(:x86_64)          => ("$bin_prefix/pprof_darwin_amd64.tar.gz", "93f5c227af23ade110fedbd07eff0bd57644fec0cde77ad359515bb254c43802"),
 
-    BinaryProvider.Windows(:i686)          => ("$bin_prefix/pprof_windows_386.exe.tar.gz", "90a343e9ae8888c0f52322761dc028d9c7edf4a202e81aea2989ac182e77010c"),
-    BinaryProvider.Windows(:x86_64)        => ("$bin_prefix/pprof_windows_amd64.exe.tar.gz", "21702d1f7317d969a283d094898e92ba3da4961c419c5351d359f3abf0894d43"),
+    BinaryProvider.Windows(:i686)          => ("$bin_prefix/pprof_windows_386.tar.gz", "90a343e9ae8888c0f52322761dc028d9c7edf4a202e81aea2989ac182e77010c"),
+    BinaryProvider.Windows(:x86_64)        => ("$bin_prefix/pprof_windows_amd64.tar.gz", "21702d1f7317d969a283d094898e92ba3da4961c419c5351d359f3abf0894d43"),
 )
 
 # First, check to see if we're all satisfied
@@ -37,11 +37,13 @@ if any(!satisfied(p; verbose=verbose) for p in products)
         # Download and install binaries
         url, tarball_hash = choose_download(download_info)
         install(url, tarball_hash; prefix=prefix, force=true, verbose=true)
-        # NHDALY MANUALLY ADDED THESE LINES TO HOOK UP THE BINARY
-        bin = mkpath(joinpath(prefix, "bin"))
-        dir = splitext(splitext(basename(url))[1])[1]
-        @show dir
-        cp(joinpath(prefix, dir, "pprof"), joinpath(bin, "pprof"))
+        # we need to move the unpacked binary from `prefix` to `prefix/bin`
+        dir        = splitext(splitext(basename(url))[1])[1]
+        destpath   = dirname(go_pprof.path)
+        binaryname = basename(go_pprof.path)
+
+        mkpath(destpath)
+        cp(joinpath(prefix, dir, binaryname), go_pprof.path)
     catch e
         if typeof(e) <: ArgumentError
             error("Your platform $(Sys.MACHINE) is not supported by this package!")
