@@ -80,10 +80,9 @@ end
 end
 
 @testset "@pprof macro" begin
-    # let arr = []
-        @pprof foo(10000, 5, [])
-        # sleep(2)
-    # end
+
+    @pprof foo(10000, 5, [])
+
     @test PProf.proc[] !== nothing
     @test process_running(PProf.proc[])
 
