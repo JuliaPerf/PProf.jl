@@ -96,16 +96,13 @@ end
 
 @testset "subprocess refresh" begin
 
-    let arr = []
-        @pprof foo(10000, 5, arr)
-        sleep(2)
-    end
+    @pprof foo(10000, 5, [])
 
     current_proc = PProf.proc[]
     @test process_running(current_proc)
 
     PProf.refresh()
-    sleep(2)
+    sleep(1)
 
     @test process_running(PProf.proc[])
     @test process_exited(current_proc)
@@ -113,16 +110,13 @@ end
 
 @testset "subprocess kill" begin
 
-    let arr = []
-        @pprof foo(10000, 5, arr)
-        sleep(2)
-    end
+    @pprof foo(10000, 5, [])
 
     current_proc = PProf.proc[]
     @test process_running(current_proc)
 
     PProf.kill()
-    sleep(2)
+    sleep(1)
 
     @test process_exited(current_proc)
     @test PProf.proc[] === nothing
