@@ -1,10 +1,19 @@
 module PProf
 
-export pprof
+export pprof, @pprof
 
 using Profile
 using ProtoBuf
 using OrderedCollections
+
+using Profile: clear
+
+"""
+    PProf.clear()
+
+Alias for `Profile.clear()`
+"""
+clear
 
 # Load in `deps.jl`, complaining if it does not exist
 const depsjl_path = joinpath(@__DIR__, "..", "deps", "deps.jl")
@@ -25,6 +34,8 @@ include(joinpath("..", "lib", "perftools.jl"))
 import .perftools.profiles: ValueType, Sample, Function,
                             Location, Line
 const PProfile = perftools.profiles.Profile
+
+const proc = Ref{Union{Base.Process, Nothing}}(nothing)
 
 """
     _enter!(dict::OrderedDict{T, Int64}, key::T) where T
@@ -55,7 +66,14 @@ using Base.StackTraces: lookup, StackFrame
             web = true, webhost = "localhost", webport = 57599,
             out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "")
 
-Fetches and converts `Profile` data to the `pprof` format.
+Fetches the collected `Profile` data, exports to the `pprof` format, and (optionally) opens
+a `pprof` web-server for interactively viewing the results.
+
+If `web=true`, the web-server is opened in the background. Re-running `pprof()` will refresh
+the web-server to use the new output.
+
+If you manually edit the output file, `PProf.refresh()` will refresh the server without
+overwriting the output file. `PProf.kill()` will kill the server.
 
 # Arguments:
 - `data::Vector{UInt}`: The data provided by `Profile.fetch` [optional].
@@ -212,13 +230,65 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     prof._function = collect(values(funcs))
     prof.location  = collect(values(locs))
 
-    # Write to
+    # Write to disk
     open(out, "w") do io
         writeproto(io, prof)
     end
 
-    if web run(`$go_pprof -http=$webhost:$webport $out`) end
+    if web
+        refresh(webhost = webhost, webport = webport, file = out)
+    end
+
     out
+end
+
+"""
+    refresh(; webhost = "localhost", webport = 57599, file = "profile.pb.gz")
+
+Start or restart the go pprof webserver.
+
+- `webhost::AbstractString`: Which host to launch the webserver on.
+- `webport::Integer`: Which port to launch the webserver on.
+- `file::String`: Profile file to open.
+"""
+function refresh(; webhost::AbstractString = "localhost",
+                   webport::Integer = 57599,
+                   file::AbstractString = "profile.pb.gz")
+
+    if proc[] === nothing
+        # The first time, register an atexit hook to kill the web server.
+        atexit(PProf.kill)
+    else
+        # On subsequent calls, restart the pprof web server.
+        Base.kill(proc[])
+    end
+
+    proc[] = open(pipeline(`$go_pprof -http=$webhost:$webport $file`))
+end
+
+"""
+    pprof_kill()
+
+Kills the pprof server if running.
+"""
+function kill()
+    if proc[] !== nothing
+        Base.kill(proc[])
+        proc[] = nothing
+    end
+end
+
+
+"""
+    @pprof ex
+
+Profiles the expression using `@profile` and starts or restarts `pprof`.
+"""
+macro pprof(ex)
+    esc(quote
+        $Profile.@profile $ex
+        $(@__MODULE__).pprof()
+    end)
 end
 
 end # module

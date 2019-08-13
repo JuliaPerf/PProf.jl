@@ -1,0 +1,5 @@
+profile.pb.gz
+/Manifest.toml
+/deps/usr/
+/deps/build.log
+/deps/deps.jl
