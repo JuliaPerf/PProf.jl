@@ -230,7 +230,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     prof._function = collect(values(funcs))
     prof.location  = collect(values(locs))
 
-    # Write to
+    # Write to disk
     open(out, "w") do io
         writeproto(io, prof)
     end
@@ -245,7 +245,7 @@ end
 """
     refresh(; webhost = "localhost", webport = 57599, file = "profile.pb.gz")
 
-Start or restart the pprof server
+Start or restart the go pprof webserver.
 
 - `webhost::AbstractString`: Which host to launch the webserver on.
 - `webport::Integer`: Which port to launch the webserver on.
@@ -255,7 +255,11 @@ function refresh(; webhost::AbstractString = "localhost",
                    webport::Integer = 57599,
                    file::AbstractString = "profile.pb.gz")
 
-    if proc[] !== nothing
+    if proc[] === nothing
+        # The first time, register an atexit hook to kill the web server.
+        atexit(PProf.kill)
+    else
+        # On subsequent calls, restart the pprof web server.
         Base.kill(proc[])
     end
 
