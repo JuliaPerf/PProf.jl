@@ -57,7 +57,7 @@ end
     Profile.clear()
 
     let arr = []
-        @profile foo(10000, 5, arr)
+        @profile foo(1000000, 5, arr)
         sleep(2)
     end
     data = Profile.fetch()
