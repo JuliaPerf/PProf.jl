@@ -56,7 +56,7 @@ function _enter!(dict::OrderedDict{T, Int64}, key::T) where T
     end
 end
 
-using Base.StackTraces: lookup, StackFrame
+using Base.StackTraces: StackFrame
 
 # TODO:
 # - Mappings
@@ -101,6 +101,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     if data === nothing
         data = copy(Profile.fetch())
     end
+    lookup = Profile.getdict(data)
     if period === nothing
         period = ccall(:jl_profile_delay_nsec, UInt64, ())
     end
@@ -181,7 +182,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
         location_from_c = true
-        for frame in lookup(ip)
+        for frame in lookup[ip]
             # ip 0 is reserved
             frame.pointer == 0 && continue
             # if any of the frames is not from_c the entire location is not from_c
