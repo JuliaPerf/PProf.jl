@@ -91,6 +91,7 @@ overwriting the output file. `PProf.kill()` will kill the server.
 """
 function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                period::Union{Nothing, UInt64} = nothing;
+               lookup::Union{Nothing, Dict{UInt,Array{StackFrame,1}}} = nothing,
                web::Bool = true,
                webhost::AbstractString = "localhost",
                webport::Integer = 57599,
@@ -101,7 +102,9 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     if data === nothing
         data = copy(Profile.fetch())
     end
-    lookup = Profile.getdict(data)
+    if lookup === nothing
+        lookup = Profile.getdict(data)
+    end
     if period === nothing
         period = ccall(:jl_profile_delay_nsec, UInt64, ())
     end
