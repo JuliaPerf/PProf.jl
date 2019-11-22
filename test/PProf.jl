@@ -6,7 +6,7 @@ using Test
 using Profile
 using ProtoBuf
 
-const out = tempname()
+const out = tempname() * ".pb.gz"
 
 function foo(n, a, out=[])
     # make this expensive to ensure it's sampled
@@ -33,10 +33,10 @@ end
     _prior_profile_output = Profile.retrieve()
 
     # Write the profile
-    pprof(out=out, web=false)
+    outf = pprof(out=out, web=false)
 
     # Read the exported profile
-    prof = open(io->readproto(io, PProf.perftools.profiles.Profile()), out, "r")
+    prof = open(io->readproto(io, PProf.perftools.profiles.Profile()), outf, "r")
 
     # Verify that we exported stack trace samples:
     @test length(prof.sample) > 0
@@ -121,6 +121,14 @@ end
     @test PProf.proc[] === nothing
     @test isfile("profile.pb.gz")
     rm("profile.pb.gz")
+end
+
+@testset "enforce correct output file extension (.pb.gz)" begin
+    dir = mktempdir()
+    @test basename(pprof(out="$dir/test")) == "test.pb.gz"
+    @test basename(pprof(out="$dir/test.pb.gz")) == "test.pb.gz"
+
+    @test_throws AssertionError pprof(out="$dir/")  # directory path with no file throws err
 end
 
 end # module

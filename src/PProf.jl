@@ -104,6 +104,11 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     if period === nothing
         period = ccall(:jl_profile_delay_nsec, UInt64, ())
     end
+    @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"
+    if !endswith(out, ".pb.gz")
+        out = "$out.pb.gz"
+        @info "Writing output to $out"
+    end
 
     string_table = OrderedDict{AbstractString, Int64}()
     enter!(string) = _enter!(string_table, string)
