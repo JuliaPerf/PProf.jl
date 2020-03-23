@@ -5,6 +5,7 @@ export pprof, @pprof
 using Profile
 using ProtoBuf
 using OrderedCollections
+import pprof_jll
 
 using Profile: clear
 
@@ -14,20 +15,6 @@ using Profile: clear
 Alias for `Profile.clear()`
 """
 clear
-
-# Load in `deps.jl`, complaining if it does not exist
-const depsjl_path = joinpath(@__DIR__, "..", "deps", "deps.jl")
-if !isfile(depsjl_path)
-    error("PProf not installed properly, run Pkg.build(\"PProf\"), restart Julia and try again")
-end
-include(depsjl_path)
-
-# Module initialization function
-function __init__()
-    # Always check your dependencies from `deps.jl`
-    check_deps()
-end
-
 
 include(joinpath("..", "lib", "perftools.jl"))
 
@@ -269,7 +256,9 @@ function refresh(; webhost::AbstractString = "localhost",
         Base.kill(proc[])
     end
 
-    proc[] = open(pipeline(`$go_pprof -http=$webhost:$webport $file`))
+    proc[] = pprof_jll.pprof() do pprof_path 
+        open(pipeline(`$pprof_path -http=$webhost:$webport $file`))
+    end
 end
 
 """
