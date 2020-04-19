@@ -51,7 +51,9 @@ using Base.StackTraces: StackFrame
 """
     pprof(data, period;
             web = true, webhost = "localhost", webport = 57599,
-            out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "")
+            out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "",
+            ui_relative_percentages = true,
+         )
 
 Fetches the collected `Profile` data, exports to the `pprof` format, and (optionally) opens
 a `pprof` web-server for interactively viewing the results.
@@ -75,6 +77,8 @@ overwriting the output file. `PProf.kill()` will kill the server.
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
+- `ui_relative_percentages`: Passes `-relative_percentages` to pprof. Causes nodes
+  ignored/hidden through the web UI to be ignored from totals when computing percentages.
 """
 function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                period::Union{Nothing, UInt64} = nothing;
@@ -84,7 +88,9 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                out::AbstractString = "profile.pb.gz",
                from_c::Bool = true,
                drop_frames::Union{Nothing, AbstractString} = nothing,
-               keep_frames::Union{Nothing, AbstractString} = nothing)
+               keep_frames::Union{Nothing, AbstractString} = nothing,
+               ui_relative_percentages::Bool = true,
+            )
     if data === nothing
         data = copy(Profile.fetch())
     end
@@ -229,24 +235,30 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     end
 
     if web
-        refresh(webhost = webhost, webport = webport, file = out)
+        refresh(webhost = webhost, webport = webport, file = out,
+            ui_relative_percentages = ui_relative_percentages)
     end
 
     out
 end
 
 """
-    refresh(; webhost = "localhost", webport = 57599, file = "profile.pb.gz")
+    refresh(; webhost = "localhost", webport = 57599, file = "profile.pb.gz",
+            ui_relative_percentages = true)
 
 Start or restart the go pprof webserver.
 
 - `webhost::AbstractString`: Which host to launch the webserver on.
 - `webport::Integer`: Which port to launch the webserver on.
 - `file::String`: Profile file to open.
+- `ui_relative_percentages::Bool`: Passes `-relative_percentages` to pprof. Causes nodes
+  ignored/hidden through the web UI to be ignored from totals when computing percentages.
 """
 function refresh(; webhost::AbstractString = "localhost",
                    webport::Integer = 57599,
-                   file::AbstractString = "profile.pb.gz")
+                   file::AbstractString = "profile.pb.gz",
+                   ui_relative_percentages::Bool = true,
+                )
 
     if proc[] === nothing
         # The first time, register an atexit hook to kill the web server.
@@ -256,8 +268,10 @@ function refresh(; webhost::AbstractString = "localhost",
         Base.kill(proc[])
     end
 
+    relative_percentages_flag = ui_relative_percentages ? "-relative_percentages" : ""
+
     proc[] = pprof_jll.pprof() do pprof_path 
-        open(pipeline(`$pprof_path -http=$webhost:$webport $file`))
+        open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
     end
 end
 
