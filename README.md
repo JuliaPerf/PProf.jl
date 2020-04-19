@@ -29,15 +29,18 @@ For more usage examples see the pprof docs: https://github.com/google/pprof/blob
 help?> pprof
   pprof(data, period;
           web = true, webhost = "localhost", webport = 57599,
-          out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "")
+          out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "",
+          ui_relative_percentages = true,
+       )
 
-  Fetches and converts Profile data to the pprof format.
-```
+  Fetches the collected Profile data, exports to the pprof format, and (optionally) opens a pprof web-server for interactively
+  viewing the results.
+  ```
 ```julia
 help?> @pprof
   @pprof ex
 
-  Profiles the expression using @profile and starts or restarts pprof.
+  Profiles the expression using @profile and starts or restarts the pprof() web UI with default arguments.
 ```
 
 Calling `pprof()` or `@pprof` exports the profiling results to disk, and launches the web server in the background pointed at the results. Calling it again overwrites the results and refreshes the server, so you can reload the web-page to see your updated results. The link to the webserver is printed to your terminal, which you can then open in a browser.
