@@ -4,6 +4,8 @@ authors = ["Valentin Churavy <v.churavy@gmail.com>", "Nathan Daly <nhdaly@gmail.
 version = "1.1.0"
 
 [deps]
+AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+FlameGraphs = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
