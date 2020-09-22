@@ -189,10 +189,15 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             # if any of the frames is not from_c the entire location is not from_c
             location_from_c &= frame.from_c
 
-            # TODO: Use a proper unique identifier for the whole function, whereas this
-            # will be registering the same function multiple times for each different IP
-            # that we encounter the function in.
-            func_id = hash(frame)
+            # `func_id` - Uniquely identifies this function (a method instance in julia, and
+            # a function in C/C++).
+            # Note that this should be unique even for several different functions all
+            # inlined into the same frame.
+            func_id = if frame.linfo !== nothing
+                hash(frame.linfo)
+            else
+                hash((frame.func, frame.file, frame.line))
+            end
             push!(location.line, Line(function_id = func_id, line = frame.line))
 
             # Known function
@@ -278,7 +283,7 @@ function refresh(; webhost::AbstractString = "localhost",
 
     relative_percentages_flag = ui_relative_percentages ? "-relative_percentages" : ""
 
-    proc[] = pprof_jll.pprof() do pprof_path 
+    proc[] = pprof_jll.pprof() do pprof_path
         open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
     end
 end
