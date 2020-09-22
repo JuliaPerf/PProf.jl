@@ -81,6 +81,7 @@ overwriting the output file. `PProf.kill()` will kill the server.
   ignored/hidden through the web UI to be ignored from totals when computing percentages.
 """
 function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
+               lidict::Union{Nothing, Dict} = nothing,
                period::Union{Nothing, UInt64} = nothing;
                web::Bool = true,
                webhost::AbstractString = "localhost",
@@ -94,7 +95,10 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     if data === nothing
         data = copy(Profile.fetch())
     end
-    lookup = Profile.getdict(data)
+    lookup = lidict
+    if lookup === nothing
+        lookup = Profile.getdict(data)
+    end
     if period === nothing
         period = ccall(:jl_profile_delay_nsec, UInt64, ())
     end
@@ -270,7 +274,7 @@ function refresh(; webhost::AbstractString = "localhost",
 
     relative_percentages_flag = ui_relative_percentages ? "-relative_percentages" : ""
 
-    proc[] = pprof_jll.pprof() do pprof_path 
+    proc[] = pprof_jll.pprof() do pprof_path
         open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
     end
 end
