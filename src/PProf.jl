@@ -180,20 +180,28 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
         location_from_c = true
+        # Will have multiple frames if frames were inlined (the last frame is the "real
+        # function", the inlinee)
         for frame in lookup[ip]
             # ip 0 is reserved
             frame.pointer == 0 && continue
+
             # if any of the frames is not from_c the entire location is not from_c
             location_from_c &= frame.from_c
 
-            push!(location.line, Line(function_id = frame.pointer, line = frame.line))
+            # TODO: Use a proper unique identifier for the whole function, whereas this
+            # will be registering the same function multiple times for each different IP
+            # that we encounter the function in.
+            func_id = hash(frame)
+            push!(location.line, Line(function_id = func_id, line = frame.line))
+
             # Known function
-            frame.pointer in seen_funcs && continue
-            push!(seen_funcs, frame.pointer)
+            func_id in seen_funcs && continue
+            push!(seen_funcs, func_id)
 
             # Store the function in our functions dict
             funcProto = Function()
-            funcProto.id = frame.pointer
+            funcProto.id = func_id
             file = nothing
             if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
                 linfo = frame.linfo::Core.MethodInstance
@@ -212,7 +220,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             funcProto.system_name = funcProto.name
             # Only keep C functions if from_c=true
             if (from_c || !frame.from_c)
-                funcs[frame.pointer] = funcProto
+                funcs[func_id] = funcProto
             end
         end
         locs_from_c[ip] = location_from_c
