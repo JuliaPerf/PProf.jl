@@ -31,7 +31,7 @@ function pprof(fg::Node{NodeData},
     ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
 
     function _register_function(funcs, linfo, frame)
-        id = objectid(linfo)
+        id = frame.pointer
 
         # Known function
         haskey(funcs, id) && return
@@ -47,6 +47,7 @@ function pprof(fg::Node{NodeData},
             funcProto.start_line = convert(Int64, meth.line)
         else
             # frame.linfo either nothing or CodeInfo, either way fallback
+            # (This could be because we are `from_c`)
             file = string(frame.file)
             funcProto.name = enter!(string(frame.func))
             funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
@@ -99,18 +100,17 @@ function pprof(fg::Node{NodeData},
         while node.parent != node
             data = node.data
 
-            if data.sf.from_c
-                # TODO
+            if !from_c && data.sf.from_c
                 node = node.parent
                 continue
             end
 
-            # For non-C functions, use linfo as the location id
-            linfo = data.sf.linfo
-            id = objectid(linfo)
+            id = data.sf.pointer
+
             location = Location(;id = id, address = id, line=[])
             push!(location_id, id)
             locs[id] = location
+            linfo = data.sf.linfo
 
             _register_function(funcs, linfo, data.sf)
             push!(location.line, Line(function_id = id, line = data.sf.line))
