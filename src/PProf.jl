@@ -180,20 +180,33 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
         location_from_c = true
+        # Will have multiple frames if frames were inlined (the last frame is the "real
+        # function", the inlinee)
         for frame in lookup[ip]
             # ip 0 is reserved
             frame.pointer == 0 && continue
+
             # if any of the frames is not from_c the entire location is not from_c
             location_from_c &= frame.from_c
 
-            push!(location.line, Line(function_id = frame.pointer, line = frame.line))
+            # `func_id` - Uniquely identifies this function (a method instance in julia, and
+            # a function in C/C++).
+            # Note that this should be unique even for several different functions all
+            # inlined into the same frame.
+            func_id = if frame.linfo !== nothing
+                hash(frame.linfo)
+            else
+                hash((frame.func, frame.file, frame.line))
+            end
+            push!(location.line, Line(function_id = func_id, line = frame.line))
+
             # Known function
-            frame.pointer in seen_funcs && continue
-            push!(seen_funcs, frame.pointer)
+            func_id in seen_funcs && continue
+            push!(seen_funcs, func_id)
 
             # Store the function in our functions dict
             funcProto = Function()
-            funcProto.id = frame.pointer
+            funcProto.id = func_id
             file = nothing
             if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
                 linfo = frame.linfo::Core.MethodInstance
@@ -212,7 +225,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             funcProto.system_name = funcProto.name
             # Only keep C functions if from_c=true
             if (from_c || !frame.from_c)
-                funcs[frame.pointer] = funcProto
+                funcs[func_id] = funcProto
             end
         end
         locs_from_c[ip] = location_from_c
@@ -270,7 +283,7 @@ function refresh(; webhost::AbstractString = "localhost",
 
     relative_percentages_flag = ui_relative_percentages ? "-relative_percentages" : ""
 
-    proc[] = pprof_jll.pprof() do pprof_path 
+    proc[] = pprof_jll.pprof() do pprof_path
         open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
     end
 end
