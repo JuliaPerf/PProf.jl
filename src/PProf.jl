@@ -270,7 +270,7 @@ function refresh(; webhost::AbstractString = "localhost",
 
     relative_percentages_flag = ui_relative_percentages ? "-relative_percentages" : ""
 
-    proc[] = pprof_jll.pprof() do pprof_path 
+    proc[] = pprof_jll.pprof() do pprof_path
         open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
     end
 end
@@ -297,7 +297,7 @@ default arguments.
 macro pprof(ex)
     esc(quote
         $Profile.@profile $ex
-        $(@__MODULE__).pprof()
+        $pprof()
     end)
 end
 
