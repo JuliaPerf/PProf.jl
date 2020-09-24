@@ -52,7 +52,7 @@ using Base.StackTraces: StackFrame
     pprof([data, [lidict]];
             web = true, webhost = "localhost", webport = 57599,
             out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "",
-            ui_relative_percentages = true,
+            ui_relative_percentages = true, sampling_delay = nothing,
          )
 
 Fetches the collected `Profile` data, exports to the `pprof` format, and (optionally) opens
