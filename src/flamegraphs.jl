@@ -41,15 +41,13 @@ function pprof(fg::Node{NodeData},
         if linfo !== nothing && linfo isa Core.MethodInstance
             meth = linfo.def
             file = string(meth.file)
-            # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
-            funcProto.name       = enter!(repr(string(meth.module, ".", meth.name))[2:end-1])
+            funcProto.name       = enter!(string(meth.module, ".", meth.name))
             funcProto.start_line = convert(Int64, meth.line)
         else
             # frame.linfo either nothing or CodeInfo, either way fallback
             # (This could be because we are `from_c`)
             file = string(frame.file)
-            # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
-            funcProto.name = enter!(repr(string(frame.func))[2:end-1])
+            funcProto.name = enter!(string(frame.func))
             funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
         end
         file = Base.find_source_file(file)
