@@ -30,9 +30,7 @@ function pprof(fg::Node{NodeData},
     enter!(::Nothing) = _enter!(string_table, "nothing")
     ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
 
-    function _register_function(funcs, linfo, frame)
-        id = frame.pointer
-
+    function _register_function(funcs, id, linfo, frame)
         # Known function
         haskey(funcs, id) && return
 
@@ -105,15 +103,26 @@ function pprof(fg::Node{NodeData},
                 continue
             end
 
-            id = data.sf.pointer
+            frame = data.sf
+            id = if frame.pointer !== UInt64(0x0)
+                frame.pointer
+            else
+                hash(frame)
+            end
 
             location = Location(;id = id, address = id, line=[])
             push!(location_id, id)
             locs[id] = location
             linfo = data.sf.linfo
 
-            _register_function(funcs, linfo, data.sf)
-            push!(location.line, Line(function_id = id, line = data.sf.line))
+            func_id = if frame.linfo !== nothing
+                hash(frame.linfo)
+            else
+                hash((frame.func, frame.file, frame.line))
+            end
+
+            _register_function(funcs, func_id, linfo, frame)
+            push!(location.line, Line(function_id = func_id, line = frame.line))
 
             node = node.parent
         end
