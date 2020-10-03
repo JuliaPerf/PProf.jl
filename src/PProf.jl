@@ -49,10 +49,10 @@ using Base.StackTraces: StackFrame
 # - Mappings
 
 """
-    pprof(data, period;
+    pprof([data, [lidict]];
             web = true, webhost = "localhost", webport = 57599,
             out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "",
-            ui_relative_percentages = true,
+            ui_relative_percentages = true, sampling_delay = nothing,
          )
 
 Fetches the collected `Profile` data, exports to the `pprof` format, and (optionally) opens
@@ -64,11 +64,16 @@ the web-server to use the new output.
 If you manually edit the output file, `PProf.refresh()` will refresh the server without
 overwriting the output file. `PProf.kill()` will kill the server.
 
+You can also use `PProf.refresh(file="...")` to open a new file in the server.
+
 # Arguments:
-- `data::Vector{UInt}`: The data provided by `Profile.fetch` [optional].
-- `period::UInt64`: The sampling period in nanoseconds [optional].
+- `data::Vector{UInt}`: The data provided by `Profile.retrieve()` [optional].
+- `lidict::Dict`: The lookup dictionary provided by `Profile.retrieve()` [optional].
+    - Note that you need both the `data` and the `lidict` returned from
+      `Profile.retrieve()` in order to export profiling data between julia processes.
 
 # Keyword Arguments
+- `sampling_delay::UInt64`: The period between samples in nanoseconds [optional].
 - `web::Bool`: Whether to launch the `go tool pprof` interactive webserver for viewing results.
 - `webhost::AbstractString`: If using `web`, which host to launch the webserver on.
 - `webport::Integer`: If using `web`, which port to launch the webserver on.
@@ -81,7 +86,8 @@ overwriting the output file. `PProf.kill()` will kill the server.
   ignored/hidden through the web UI to be ignored from totals when computing percentages.
 """
 function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
-               period::Union{Nothing, UInt64} = nothing;
+               lidict::Union{Nothing, Dict} = nothing;
+               sampling_delay::Union{Nothing, UInt64} = nothing,
                web::Bool = true,
                webhost::AbstractString = "localhost",
                webport::Integer = 57599,
@@ -94,9 +100,12 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     if data === nothing
         data = copy(Profile.fetch())
     end
-    lookup = Profile.getdict(data)
-    if period === nothing
-        period = ccall(:jl_profile_delay_nsec, UInt64, ())
+    lookup = lidict
+    if lookup === nothing
+        lookup = Profile.getdict(data)
+    end
+    if sampling_delay === nothing
+        sampling_delay = ccall(:jl_profile_delay_nsec, UInt64, ())
     end
     @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"
     if !endswith(out, ".pb.gz")
@@ -128,7 +137,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         sample = [], location = [], _function = [],
         mapping = [], string_table = [],
         sample_type = sample_type, default_sample_type = 1, # events
-        period = period, period_type = ValueType!("cpu", "nanoseconds")
+        period = sampling_delay, period_type = ValueType!("cpu", "nanoseconds")
     )
 
     if drop_frames !== nothing
@@ -180,20 +189,33 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip, line=[])
         location_from_c = true
+        # Will have multiple frames if frames were inlined (the last frame is the "real
+        # function", the inlinee)
         for frame in lookup[ip]
             # ip 0 is reserved
             frame.pointer == 0 && continue
+
             # if any of the frames is not from_c the entire location is not from_c
             location_from_c &= frame.from_c
 
-            push!(location.line, Line(function_id = frame.pointer, line = frame.line))
+            # `func_id` - Uniquely identifies this function (a method instance in julia, and
+            # a function in C/C++).
+            # Note that this should be unique even for several different functions all
+            # inlined into the same frame.
+            func_id = if frame.linfo !== nothing
+                hash(frame.linfo)
+            else
+                hash((frame.func, frame.file, frame.line))
+            end
+            push!(location.line, Line(function_id = func_id, line = frame.line))
+
             # Known function
-            frame.pointer in seen_funcs && continue
-            push!(seen_funcs, frame.pointer)
+            func_id in seen_funcs && continue
+            push!(seen_funcs, func_id)
 
             # Store the function in our functions dict
             funcProto = Function()
-            funcProto.id = frame.pointer
+            funcProto.id = func_id
             file = nothing
             if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
                 linfo = frame.linfo::Core.MethodInstance
@@ -212,7 +234,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             funcProto.system_name = funcProto.name
             # Only keep C functions if from_c=true
             if (from_c || !frame.from_c)
-                funcs[frame.pointer] = funcProto
+                funcs[func_id] = funcProto
             end
         end
         locs_from_c[ip] = location_from_c

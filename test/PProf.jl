@@ -60,18 +60,26 @@ end
         @profile foo(1000000, 5, arr)
         sleep(2)
     end
-    data = Profile.fetch()
+    for i in 1:2
+        if i == 1
+            data = Profile.fetch()
+            args = (data,)
+        else
+            data,lidict = Profile.retrieve()
+            args = (data, lidict)
+        end
 
-    # Write a profile that includes C function frames
-    with_c = load_prof_proto(pprof(data, out=tempname(), web=false, from_c = true))
+        # Write a profile that includes C function frames
+        with_c = load_prof_proto(pprof(args..., out=tempname(), web=false, from_c = true))
 
-    # Write a profile that excludes C function frames
-    without_c = load_prof_proto(pprof(data, out=tempname(), web=false, from_c = false))
+        # Write a profile that excludes C function frames
+        without_c = load_prof_proto(pprof(args..., out=tempname(), web=false, from_c = false))
 
-    # Test that C frames were excluded
-    @test length(with_c.sample) == length(without_c.sample)
-    @test length(with_c.location) > length(without_c.location)
-    @test length(with_c._function) > length(without_c._function)
+        # Test that C frames were excluded
+        @test length(with_c.sample) == length(without_c.sample)
+        @test length(with_c.location) > length(without_c.location)
+        @test length(with_c._function) > length(without_c._function)
+    end
 end
 
 @testset "drop_frames/keep_frames" begin
