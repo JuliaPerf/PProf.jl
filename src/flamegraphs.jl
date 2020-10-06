@@ -49,6 +49,7 @@ function pprof(fg::Node{NodeData},
             # (This could be because we are `from_c`)
             file = string(frame.file)
             # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
+            # TODO: Remove this hack after https://github.com/google/pprof/pull/564
             funcProto.name = enter!(repr(string(frame.func))[2:end-1])
             funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
         end
@@ -92,10 +93,52 @@ function pprof(fg::Node{NodeData},
     # start decoding backtraces
     lastwaszero = true
 
-    for leaf in AbstractTrees.Leaves(fg)
+    # Do a top-down walk of the flame graph from root to leaves.
+    # At each node, we enter a "sample" to flame graph if there is any time not covered by
+    # its children. That is, if the exclusive time of any node is non-zero.
+    # AND, we want to enter each "section" of exclusive time as a separate sample, in case
+    # that allows PProf to do any ordering in its display.
+    # So, the algorithm is that we enter a sample for every gap between the spans of the
+    # children.
+    function emit_tree(node)
+        span = node.data.span
+        start = span.start
+        stop = span.stop
+        child = node.child
+        if child === node
+            # We're a leaf node, so just emit this node directly, and then we're done.
+            emit_stack_sample(child, start:stop)
+            return
+        end
+        while true  # break when we've exhausted the children
+            cspan = child.data.span
+            if cspan.start > start
+                # We know there's a gap before the next child starts
+                # So we emit a frame for `node`
+                emit_stack_sample(node, start:cspan.start-1)
+            end
+            # Now emit the child node
+            emit_tree(child)
 
+            start = cspan.stop + 1
+
+            if child.sibling === child break end
+            child = child.sibling
+        end
+        # If there was still time after the last child, that's another gap that we can emit.
+        cspan = child.data.span
+        if stop > cspan.stop
+            # We know there's a gap before the next child starts
+            # So we emit a frame for `node`
+            emit_stack_sample(node, start:stop)
+        end
+    end
+
+    function emit_stack_sample(leaf, span)
         location_id = Vector{Any}()
 
+        # Walk back up the callstack, collecting all stack traces along the way, building
+        # up a stack trace for this span.
         node = leaf
         while node.parent != node
             data = node.data
@@ -106,13 +149,11 @@ function pprof(fg::Node{NodeData},
             end
 
             frame = data.sf
-            id = if frame.pointer !== UInt64(0x0)
-                frame.pointer
-            else
-                hash(frame)
-            end
+            # Don't use the ip pointer, because this data is provided by the user and isn't
+            # guaranteed to be unique.
+            id = hash(frame)
 
-            location = Location(;id = id, address = id, line=[])
+            location = Location(;id = id, address = frame.pointer, line=[])
             push!(location_id, id)
             locs[id] = location
             linfo = data.sf.linfo
@@ -130,11 +171,13 @@ function pprof(fg::Node{NodeData},
         end
 
         value = [
-            length(leaf.data.span), # time duration (nanoseconds?)
+            length(span), # time duration (nanoseconds?)
         ]
         push!(prof.sample, Sample(;location_id = location_id, value = value))
 
     end
+
+    emit_tree(fg)
 
     # Build Profile
     prof.string_table = collect(keys(string_table))
