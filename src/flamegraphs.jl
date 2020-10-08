@@ -140,7 +140,7 @@ function pprof(fg::Node{NodeData},
         # Walk back up the callstack, collecting all stack traces along the way, building
         # up a stack trace for this span.
         node = leaf
-        while node.parent != node
+        while true  # do-while node.parent === node    -- this makes sure we get the top node.
             data = node.data
 
             if !from_c && data.sf.from_c
@@ -166,6 +166,10 @@ function pprof(fg::Node{NodeData},
 
             _register_function(funcs, func_id, linfo, frame)
             push!(location.line, Line(function_id = func_id, line = frame.line))
+
+            if node.parent === node
+                break
+            end
 
             node = node.parent
         end
