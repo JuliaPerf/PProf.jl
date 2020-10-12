@@ -73,7 +73,7 @@ function pprof(fg::Node{NodeData},
     locs_from_c  = Dict{UInt64, Bool}()
 
     sample_type = [
-        ValueType!("cpu",      "nanoseconds"), # Mandatory
+        ValueType!("events", "count"), # Mandatory
     ]
 
     prof = PProfile(
