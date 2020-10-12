@@ -175,7 +175,7 @@ function pprof(fg::Node{NodeData},
         end
 
         value = [
-            length(span), # time duration (nanoseconds?)
+            length(span), # Number of samples in this frame.
         ]
         push!(prof.sample, Sample(;location_id = location_id, value = value))
 
@@ -201,5 +201,4 @@ function pprof(fg::Node{NodeData},
 
     out
 end
-
 
