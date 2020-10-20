@@ -51,8 +51,8 @@ using Base.StackTraces: StackFrame
 """
     pprof([data, [lidict]];
             web = true, webhost = "localhost", webport = 57599,
-            out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "",
-            ui_relative_percentages = true, sampling_delay = nothing,
+            out = "profile.pb.gz", from_c = true, full_signatures = false, drop_frames = "",
+            keep_frames = "", ui_relative_percentages = true, sampling_delay = nothing,
          )
 
 Fetches the collected `Profile` data, exports to the `pprof` format, and (optionally) opens
@@ -79,6 +79,8 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `webport::Integer`: If using `web`, which port to launch the webserver on.
 - `out::String`: Filename for output.
 - `from_c::Bool`: If `false`, exclude frames that come from from_c. Defaults to `true`.
+- `full_signatures::Bool`: If `true`, methods are printed as signatures with full
+                           argument types. E.g. `eval(::Module, ::Any)` instead of `eval`.
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
@@ -218,6 +220,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             funcProto = Function()
             funcProto.id = func_id
             file = nothing
+            simple_name = _escape_name_for_pprof(frame.func)
+            local full_name_with_args
             if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
                 linfo = frame.linfo::Core.MethodInstance
                 meth = linfo.def
@@ -225,17 +229,23 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 io = IOBuffer()
                 Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
                 name = String(take!(io))
-                name = _escape_name_for_pprof(name, full_signatures)
-                funcProto.name       = enter!(name)
-                funcProto.system_name = enter!(_escape_name_for_pprof(name, true))
+                full_name_with_args = _escape_name_for_pprof(name)
                 funcProto.start_line = convert(Int64, meth.line)
             else
                 # frame.linfo either nothing or CodeInfo, either way fallback
                 file = string(frame.file)
-                name = _escape_name_for_pprof(string(frame.func), full_signatures)
-                funcProto.name = enter!(name)
-                funcProto.system_name = enter!(_escape_name_for_pprof(name, true))
+                full_name_with_args = _escape_name_for_pprof(string(frame.func))
                 funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+            end
+            # WEIRD TRICK: By entering a separate copy of the string (with a
+            # different string id) for the name and system_name, pprof will use
+            # the supplied `name` *verbatim*, without pruning off the arguments.
+            # So even when full_signatures == false, we want to generate two `enter!` ids.
+            funcProto.system_name = enter!(simple_name)
+            if full_signatures
+                funcProto.name = enter!(full_name_with_args)
+            else
+                funcProto.name = enter!(simple_name)
             end
             file = Base.find_source_file(file)
             funcProto.filename   = enter!(file)
@@ -271,13 +281,10 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     out
 end
 
-function _escape_name_for_pprof(name, full_signatures::Bool)
-    if full_signatures
-        name = replace(replace(name, '('=>'（'), ')'=>'）')
-    end
+function _escape_name_for_pprof(name)
     # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
     # TODO: Remove this hack after https://github.com/google/pprof/pull/564
-    quoted = repr(name)
+    quoted = repr(string(name))
     quoted = quoted[2:thisind(quoted, end-1)]
     return quoted
 end

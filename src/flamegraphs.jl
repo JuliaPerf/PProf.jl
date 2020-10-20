@@ -39,24 +39,32 @@ function pprof(fg::Node{NodeData},
         funcProto = Function()
         funcProto.id = id
         file = nothing
-        if linfo !== nothing && linfo isa Core.MethodInstance
+        simple_name = _escape_name_for_pprof(frame.func)
+        local full_name_with_args
+        if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
+            linfo = frame.linfo::Core.MethodInstance
             meth = linfo.def
             file = string(meth.file)
             io = IOBuffer()
             Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
             name = String(take!(io))
-            name = _escape_name_for_pprof(name, full_signatures)
-            funcProto.name       = enter!(name)
-            funcProto.system_name = enter!(_escape_name_for_pprof(name, true))
+            full_name_with_args = _escape_name_for_pprof(name)
             funcProto.start_line = convert(Int64, meth.line)
         else
             # frame.linfo either nothing or CodeInfo, either way fallback
-            # (This could be because we are `from_c`)
             file = string(frame.file)
-            name = _escape_name_for_pprof(string(frame.func), full_signatures)
-            funcProto.name = enter!(name)
-            funcProto.system_name = enter!(_escape_name_for_pprof(name, true))
+            full_name_with_args = _escape_name_for_pprof(string(frame.func))
             funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+        end
+        # WEIRD TRICK: By entering a separate copy of the string (with a
+        # different string id) for the name and system_name, pprof will use
+        # the supplied `name` *verbatim*, without pruning off the arguments.
+        # So even when full_signatures == false, we want to generate two `enter!` ids.
+        funcProto.system_name = enter!(simple_name)
+        if full_signatures
+            funcProto.name = enter!(full_name_with_args)
+        else
+            funcProto.name = enter!(simple_name)
         end
         file = Base.find_source_file(file)
         funcProto.filename   = enter!(file)
