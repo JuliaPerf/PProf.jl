@@ -18,7 +18,9 @@ end
 @testset "empty output" begin
     Profile.clear()
     # Function doesn't error if no Profile recorded
+    rm(out, force=true)
     @test (pprof(out=out, web=false); true)
+    @test ispath(out)
 end
 
 @testset "export basic profile" begin

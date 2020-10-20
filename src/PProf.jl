@@ -323,4 +323,6 @@ macro pprof(ex)
     end)
 end
 
+include("flamegraphs.jl")
+
 end # module
