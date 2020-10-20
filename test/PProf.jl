@@ -84,6 +84,14 @@ end
     end
 end
 
+@testset "full_signatures" begin
+    Profile.clear()
+    @profile foo(1000000, 5, [])
+    @test "foo" in load_prof_proto(pprof(out=tempname(), web=false, full_signatures = false)).string_table
+    @test any(occursin.(Regex("^foo\\(::$Int, ::$Int, ::(Vector|Array)"),
+                load_prof_proto(pprof(out=tempname(), web=false, full_signatures = true)).string_table))
+end
+
 @testset "drop_frames/keep_frames" begin
     @test load_prof_proto(pprof(out=tempname(), web=false, drop_frames = "foo")).drop_frames != 0
     @test load_prof_proto(pprof(out=tempname(), web=false, keep_frames = "foo")).keep_frames != 0
