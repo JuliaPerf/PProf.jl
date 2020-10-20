@@ -43,6 +43,7 @@ function pprof(fg::Node{NodeData},
             file = string(meth.file)
             # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
             funcProto.name       = enter!(repr(string(meth.module, ".", meth.name))[2:end-1])
+            funcProto.system_name = enter!(repr(string(meth.module, ".", meth.name))[2:end-1])
             funcProto.start_line = convert(Int64, meth.line)
         else
             # frame.linfo either nothing or CodeInfo, either way fallback
@@ -51,11 +52,11 @@ function pprof(fg::Node{NodeData},
             # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
             # TODO: Remove this hack after https://github.com/google/pprof/pull/564
             funcProto.name = enter!(repr(string(frame.func))[2:end-1])
+            funcProto.system_name = enter!(repr(string(frame.func))[2:end-1])
             funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
         end
         file = Base.find_source_file(file)
         funcProto.filename   = enter!(file)
-        funcProto.system_name = funcProto.name
         # Only keep C functions if from_c=true
         if (from_c || !frame.from_c)
             funcs[id] = funcProto
