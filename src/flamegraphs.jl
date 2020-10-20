@@ -143,29 +143,26 @@ function pprof(fg::Node{NodeData},
         while true  # do-while node.parent === node    -- this makes sure we get the top node.
             data = node.data
 
-            if !from_c && data.sf.from_c
-                node = node.parent
-                continue
+            if from_c || !data.sf.from_c
+                frame = data.sf
+                # Don't use the ip pointer, because this data is provided by the user and isn't
+                # guaranteed to be unique.
+                id = hash(frame)
+
+                location = Location(;id = id, address = frame.pointer, line=[])
+                push!(location_id, id)
+                locs[id] = location
+                linfo = data.sf.linfo
+
+                func_id = if frame.linfo !== nothing
+                    hash(frame.linfo)
+                else
+                    hash((frame.func, frame.file, frame.line))
+                end
+
+                _register_function(funcs, func_id, linfo, frame)
+                push!(location.line, Line(function_id = func_id, line = frame.line))
             end
-
-            frame = data.sf
-            # Don't use the ip pointer, because this data is provided by the user and isn't
-            # guaranteed to be unique.
-            id = hash(frame)
-
-            location = Location(;id = id, address = frame.pointer, line=[])
-            push!(location_id, id)
-            locs[id] = location
-            linfo = data.sf.linfo
-
-            func_id = if frame.linfo !== nothing
-                hash(frame.linfo)
-            else
-                hash((frame.func, frame.file, frame.line))
-            end
-
-            _register_function(funcs, func_id, linfo, frame)
-            push!(location.line, Line(function_id = func_id, line = frame.line))
 
             if node.parent === node
                 break
