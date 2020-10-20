@@ -93,6 +93,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                webport::Integer = 57599,
                out::AbstractString = "profile.pb.gz",
                from_c::Bool = true,
+               full_signatures::Bool = false,
                drop_frames::Union{Nothing, AbstractString} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
@@ -221,17 +222,23 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 linfo = frame.linfo::Core.MethodInstance
                 meth = linfo.def
                 file = string(meth.file)
-                funcProto.name       = enter!(string(meth.module, ".", meth.name))
+                io = IOBuffer()
+                Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
+                name = String(take!(io))
+                name = _escape_name_for_pprof(name, full_signatures)
+                funcProto.name       = enter!(name)
+                funcProto.system_name = enter!(_escape_name_for_pprof(name, true))
                 funcProto.start_line = convert(Int64, meth.line)
             else
                 # frame.linfo either nothing or CodeInfo, either way fallback
                 file = string(frame.file)
-                funcProto.name = enter!(string(frame.func))
+                name = _escape_name_for_pprof(string(frame.func), full_signatures)
+                funcProto.name = enter!(name)
+                funcProto.system_name = enter!(_escape_name_for_pprof(name, true))
                 funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
             end
             file = Base.find_source_file(file)
             funcProto.filename   = enter!(file)
-            funcProto.system_name = funcProto.name
             # Only keep C functions if from_c=true
             if (from_c || !frame.from_c)
                 funcs[func_id] = funcProto
@@ -262,6 +269,17 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     end
 
     out
+end
+
+function _escape_name_for_pprof(name, full_signatures::Bool)
+    if full_signatures
+        name = replace(replace(name, '('=>'（'), ')'=>'）')
+    end
+    # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
+    # TODO: Remove this hack after https://github.com/google/pprof/pull/564
+    quoted = repr(name)
+    quoted = quoted[2:thisind(quoted, end-1)]
+    return quoted
 end
 
 """
