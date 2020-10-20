@@ -56,11 +56,12 @@ function pprof(fg::Node{NodeData},
             full_name_with_args = _escape_name_for_pprof(string(frame.func))
             funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
         end
-        # WEIRD TRICK: By entering a separate copy of the string (with a
-        # different string id) for the name and system_name, pprof will use
-        # the supplied `name` *verbatim*, without pruning off the arguments.
-        # So even when full_signatures == false, we want to generate two `enter!` ids.
-        funcProto.system_name = enter!(simple_name)
+        # WEIRD TRICK: By entering a *different value* for the name and system_name, pprof
+        # will use the supplied `name` *verbatim*, without pruning off the arguments. So
+        # even when full_signatures == false, we want to generate two `enter!` ids. So we
+        # achieve that by entering an _empty_ name for the system_name, so that pprof will
+        # use the `name` as provided.
+        funcProto.system_name = enter!("")
         if full_signatures
             funcProto.name = enter!(full_name_with_args)
         else
