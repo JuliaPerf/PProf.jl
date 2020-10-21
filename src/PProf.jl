@@ -54,6 +54,7 @@ using Base.StackTraces: StackFrame
             out = "profile.pb.gz", from_c = true, full_signatures = false, drop_frames = "",
             keep_frames = "", ui_relative_percentages = true, sampling_delay = nothing,
          )
+    pprof(FlameGraphs.flamegraph(); kwargs...)
 
 Fetches the collected `Profile` data, exports to the `pprof` format, and (optionally) opens
 a `pprof` web-server for interactively viewing the results.
@@ -71,6 +72,7 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `lidict::Dict`: The lookup dictionary provided by `Profile.retrieve()` [optional].
     - Note that you need both the `data` and the `lidict` returned from
       `Profile.retrieve()` in order to export profiling data between julia processes.
+- `flamegraph`: PProf also accepts profile data passed as a `FlameGraphs.jl` graph object.
 
 # Keyword Arguments
 - `sampling_delay::UInt64`: The period between samples in nanoseconds [optional].
