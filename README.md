@@ -27,15 +27,16 @@ For more usage examples see the pprof docs: https://github.com/google/pprof/blob
 ## Usage
 ```julia
 help?> pprof
-  pprof(data, period;
+  pprof([data, [lidict]];
           web = true, webhost = "localhost", webport = 57599,
-          out = "profile.pb.gz", from_c = true, drop_frames = "", keep_frames = "",
-          ui_relative_percentages = true,
-       )
+          out = "profile.pb.gz", from_c = true, full_signatures = true, drop_frames = "",
+          keep_frames = "", ui_relative_percentages = true, sampling_delay = nothing,
+        )
+  pprof(FlameGraphs.flamegraph(); kwargs...)
 
-  Fetches the collected Profile data, exports to the pprof format, and (optionally) opens a pprof web-server for interactively
-  viewing the results.
-  ```
+  Fetches the collected `Profile` data, exports to the `pprof` format, and (optionally) opens
+  a `pprof` web-server for interactively viewing the results.
+```
 ```julia
 help?> @pprof
   @pprof ex
@@ -62,4 +63,4 @@ Serving web UI on http://localhost:57599
 ## Google PProf Web View
 <img width=500px src="docs/graph.png" alt="graph"/>
 
-!["flamegraph"](docs/flamegraph.png)
+<img width=500px src="docs/flamegraph.png" alt="flamegraph"/>

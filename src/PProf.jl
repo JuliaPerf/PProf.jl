@@ -51,7 +51,7 @@ using Base.StackTraces: StackFrame
 """
     pprof([data, [lidict]];
             web = true, webhost = "localhost", webport = 57599,
-            out = "profile.pb.gz", from_c = true, full_signatures = false, drop_frames = "",
+            out = "profile.pb.gz", from_c = true, full_signatures = true, drop_frames = "",
             keep_frames = "", ui_relative_percentages = true, sampling_delay = nothing,
          )
     pprof(FlameGraphs.flamegraph(); kwargs...)
@@ -81,8 +81,8 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `webport::Integer`: If using `web`, which port to launch the webserver on.
 - `out::String`: Filename for output.
 - `from_c::Bool`: If `false`, exclude frames that come from from_c. Defaults to `true`.
-- `full_signatures::Bool`: If `true`, methods are printed as signatures with full
-                           argument types. E.g. `eval(::Module, ::Any)` instead of `eval`.
+- `full_signatures::Bool`: If `true`, methods are printed as signatures with full argument
+                           types. If `false`, as only names. E.g. `eval(::Module, ::Any)` vs `eval`.
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
@@ -97,7 +97,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                webport::Integer = 57599,
                out::AbstractString = "profile.pb.gz",
                from_c::Bool = true,
-               full_signatures::Bool = false,
+               full_signatures::Bool = true,
                drop_frames::Union{Nothing, AbstractString} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
