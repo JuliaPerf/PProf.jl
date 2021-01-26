@@ -167,11 +167,13 @@ function pprof(fg::Node{NodeData},
                 locs[id] = location
                 linfo = data.sf.linfo
 
-                func_id = if frame.linfo !== nothing
-                    hash(frame.linfo)
-                else
-                    hash((frame.func, frame.file, frame.line))
-                end
+                # If the function comes with a `linfo` (meaning the profile was generated
+                # in this process), we include it in the hash. If not, it's will be
+                # `nothing`, which is okay to hash.
+                # We include all of these in the hash though because in some contexts (such
+                # as `@snoopi_deep` profiles), two frames with the same `linfo` might have
+                # different func name.
+                func_id = hash((frame.func, frame.file, frame.line, frame.linfo))
 
                 _register_function(funcs, func_id, linfo, frame)
                 push!(location.line, Line(function_id = func_id, line = frame.line))
