@@ -19,7 +19,7 @@ clear
 include(joinpath("..", "lib", "perftools.jl"))
 
 import .perftools.profiles: ValueType, Sample, Function,
-                            Location, Line
+                            Location, Line, Label
 const PProfile = perftools.profiles.Profile
 
 const proc = Ref{Union{Base.Process, Nothing}}(nothing)
@@ -103,7 +103,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                ui_relative_percentages::Bool = true,
             )
     if data === nothing
-        data = copy(Profile.fetch())
+        data = copy(Profile.fetch(include_meta=true))
     end
     lookup = lidict
     if lookup === nothing
@@ -122,6 +122,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     enter!(string) = _enter!(string_table, string)
     enter!(::Nothing) = _enter!(string_table, "nothing")
     ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
+    Label!(key, value, unit) = Label(key = enter!(key), num = value, num_unit = enter!(unit))
+    Label!(key, value) = Label(key = enter!(key), str = enter!(string(value)))
 
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
@@ -135,7 +137,6 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
     sample_type = [
         ValueType!("events",      "count"), # Mandatory
-        ValueType!("stack_depth", "count")
     ]
 
     prof = PProfile(
@@ -154,28 +155,39 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
-    lastwaszero = true
 
-    for ip in data
-        # ip == 0x0 is the sentinel value for finishing a backtrace, therefore finising a sample
-        if ip == 0
-            # Avoid creating empty samples
-            if lastwaszero
-                @assert length(location_id) == 0
-                continue
+    idx = length(data)
+    value = nothing
+    meta = nothing
+    while idx > 0
+        if Profile.is_block_end(data, idx)
+            if value !== nothing
+                @assert meta !== nothing
+                # Finish last block
+                push!(prof.sample, Sample(;location_id = reverse!(location_id), value = value, label = meta))
+                location_id = Vector{eltype(data)}()
             end
 
-            # End of sample
+            # read metadata
+            thread_sleeping = data[idx - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            cpu_cycle_clock = data[idx - 3]
+            taskid = data[idx - 4]
+            threadid = data[idx - 5]
+
             value = [
                 1,                   # events
-                length(location_id), # stack_depth
             ]
-            push!(prof.sample, Sample(;location_id = location_id, value = value))
-            location_id = Vector{eltype(data)}()
-            lastwaszero = true
+            meta = Label[
+                Label!("thread_sleeping", thread_sleeping != 0),
+                Label!("cycle_clock", cpu_cycle_clock, "nanoseconds"),
+                Label!("taskid", taskid),
+                Label!("threadid", threadid),
+            ]
+            idx -= (Profile.nmeta + 1)
             continue
         end
-        lastwaszero = false
+        ip = data[idx]
+        idx -= 1
 
         # A backtrace consists of a set of IP (Instruction Pointers), each IP points
         # a single line of code and `litrace` has the necessary information to decode

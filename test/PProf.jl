@@ -64,10 +64,10 @@ end
     end
     for i in 1:2
         if i == 1
-            data = Profile.fetch()
+            data = Profile.fetch(include_meta = true)
             args = (data,)
         else
-            data,lidict = Profile.retrieve()
+            data,lidict = Profile.retrieve(include_meta = true)
             args = (data, lidict)
         end
 
