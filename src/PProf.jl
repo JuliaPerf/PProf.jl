@@ -352,4 +352,12 @@ end
 
 include("flamegraphs.jl")
 
+
+# Precompile as much as possible, so that profiling doesn't end up measuring our own
+# compilation.
+function __init__()
+    precompile(pprof, ()) || error("precompilation of package functions is not supposed to fail")
+    precompile(kill, ()) || error("precompilation of package functions is not supposed to fail")
+    precompile(refresh, ()) || error("precompilation of package functions is not supposed to fail")
+end
 end # module
