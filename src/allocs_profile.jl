@@ -19,18 +19,6 @@ using Base.StackTraces: StackFrame
 using PProf.ProtoBuf
 using PProf.OrderedCollections
 
-# input: e.g. "maybe_handle_const_call! at ./compiler/ssair/inlining.jl:1243"
-function parse_location(loc_str::String)
-    at_split = split(loc_str, " at "; limit=2)
-    function_name = at_split[1]
-    file_and_line = at_split[2]
-    colon_split = split(file_and_line, ":")
-    file = colon_split[1]
-    line = parse(Int, colon_split[2])
-
-    return (;function_name = function_name, file = file, line = line)
-end
-
 function to_pprof(alloc_profile::Profile.Allocs.AllocResults
                ;
                web::Bool = true,
