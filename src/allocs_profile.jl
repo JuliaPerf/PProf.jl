@@ -12,7 +12,7 @@ import Profile  # For Profile.Allocs structures
 # Import the PProf generated protobuf types from the PProf package:
 import PProf
 using PProf.perftools.profiles: ValueType, Sample, Function, Location, Line, Label
-using PProf: _enter!
+using PProf: _enter!, _escape_name_for_pprof
 const PProfile = PProf.perftools.profiles.Profile
 using Base.StackTraces: StackFrame
 
@@ -29,6 +29,7 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
                drop_frames::Union{Nothing, AbstractString} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
+               full_signatures::Bool = true,
                # TODO: decide how to name this:
                aggregate_by_type::Bool = true,
             )
@@ -41,7 +42,7 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
     end
 
     string_table = OrderedDict{AbstractString, Int64}()
-    enter!(string) = _enter!(string_table, PProf._escape_name_for_pprof(string))
+    enter!(string) = _enter!(string_table, string)
     enter!(::Nothing) = _enter!(string_table, "nothing")
     ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
 
@@ -89,19 +90,34 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
                 funcProto = Function()
                 funcProto.id = func_id
                 file = function_name
-                simple_name = function_name
+                simple_name = _escape_name_for_pprof(function_name)
                 # TODO: Get full name with arguments from profile data
                 local full_name_with_args
+                if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
+                    linfo = frame.linfo::Core.MethodInstance
+                    meth = linfo.def
+                    file = string(meth.file)
+                    io = IOBuffer()
+                    Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
+                    name = String(take!(io))
+                    full_name_with_args = _escape_name_for_pprof(name)
+                    funcProto.start_line = convert(Int64, meth.line)
+                else
+                    # frame.linfo either nothing or CodeInfo, either way fallback
+                    file = string(frame.file)
+                    full_name_with_args = _escape_name_for_pprof(string(frame.func))
+                    funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+                end
                 # WEIRD TRICK: By entering a separate copy of the string (with a
                 # different string id) for the name and system_name, pprof will use
                 # the supplied `name` *verbatim*, without pruning off the arguments.
                 # So even when full_signatures == false, we want to generate two `enter!` ids.
                 funcProto.system_name = enter!(simple_name)
-                #if full_signatures
-                #    funcProto.name = enter!(full_name_with_args)
-                #else
+                if full_signatures
+                    funcProto.name = enter!(full_name_with_args)
+                else
                     funcProto.name = enter!(simple_name)
-                #end
+                end
                 file = Base.find_source_file(file_name)
                 file = file !== nothing ? file : file_name
                 funcProto.filename   = enter!(file)
@@ -148,7 +164,7 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
             Label(key = enter!("bytes"), num = sample.size, num_unit = enter!("bytes")),
         ]
         if !aggregate_by_type
-            push!(labels, Label(key = enter!("type"), str = enter!(sample.type)))
+            push!(labels, Label(key = enter!("type"), str = enter!(_escape_name_for_pprof(string(sample.type)))))
         end
 
         push!(prof.sample, Sample(;location_id = location_ids, value = value, label = labels))
