@@ -93,11 +93,7 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
             (function_name, file_name, line_number) =
                 string(frame.func), string(frame.file), frame.line
 
-            ## Decode the IP into information about this stack frame
-            #if (!from_c && location_from_c)
-            #    continue
-            #end
-
+            # Decode the IP into information about this stack frame
             function_id = get!(funcs_map, function_name) do
                 func_id = UInt64(length(functions) + 1)
 
@@ -143,8 +139,8 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
         # for each location in the sample.stack, if it's the first time seeing it,
         # we also enter that location into the locations table
         location_ids = UInt64[
-            maybe_add_location(location)
-            for location in sample.stacktrace
+            maybe_add_location(frame)
+            for frame in sample.stacktrace if (!frame.from_c || from_c)
         ]
 
         if aggregate_by_type
