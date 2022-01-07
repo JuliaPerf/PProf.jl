@@ -140,7 +140,7 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
         # we also enter that location into the locations table
         location_ids = UInt64[
             maybe_add_location(frame)
-            for frame in sample.stacktrace if (!frame.from_c || from_c) && (frame.func != :Array)
+            for frame in sample.stacktrace if (!frame.from_c || from_c)
         ]
 
         if aggregate_by_type
