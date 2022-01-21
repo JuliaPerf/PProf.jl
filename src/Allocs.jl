@@ -156,7 +156,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
             for frame in sample.stacktrace if (!frame.from_c || from_c)
         ]
 
-        if aggregate_by_type
+        if frame_for_type
             # Add location_id for the type:
             pushfirst!(location_ids, construct_location_for_type(sample.type))
         end
@@ -172,7 +172,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
         labels = Label[
             Label(key = enter!("bytes"), num = sample.size, num_unit = enter!("bytes")),
         ]
-        if !aggregate_by_type
+        if !frame_for_type
             push!(labels, Label(key = enter!("type"), str = enter!(_escape_name_for_pprof(string(sample.type)))))
         end
 
