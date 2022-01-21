@@ -352,7 +352,7 @@ end
 
 include("flamegraphs.jl")
 
-if VERSION >= v"1.8.0-DEV.1179"  # PR https://github.com/JuliaLang/julia/pull/42768
+if VERSION >= v"1.8.0-DEV.1346"  # PR https://github.com/JuliaLang/julia/pull/42768
     include("Allocs.jl")
 end
 
