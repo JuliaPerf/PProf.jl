@@ -1,4 +1,3 @@
-# TODO: Keep this in a separate module?
 module Allocs
 
 # Most of this file was copied from the PProf.jl package, and then adapted to
@@ -100,7 +99,6 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                 funcProto.id = func_id
                 file = function_name
                 simple_name = _escape_name_for_pprof(function_name)
-                # TODO: Get full name with arguments from profile data
                 local full_name_with_args
                 if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
                     linfo = frame.linfo::Core.MethodInstance
