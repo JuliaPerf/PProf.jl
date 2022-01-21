@@ -19,7 +19,16 @@ using Base.StackTraces: StackFrame
 using PProf.ProtoBuf
 using PProf.OrderedCollections
 
-function to_pprof(alloc_profile::Profile.Allocs.AllocResults
+"""
+PProf.Allocs.pprof([alloc_profile]; kwargs...)
+
+The `kwargs` are the same as [`PProf.pprof`](@ref), except:
+- `frame_for_type = true`: If true, add a frame to the FlameGraph for the Type:
+  of every allocation. Note that this tends to make the Graph view harder to
+  read, because it's over-aggregated, so we recommend filtering out the `Type:`
+  nodes in the PProf web UI.
+"""
+function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch()
                ;
                web::Bool = true,
                webhost::AbstractString = "localhost",
@@ -30,8 +39,8 @@ function to_pprof(alloc_profile::Profile.Allocs.AllocResults
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
                full_signatures::Bool = true,
-               # TODO: decide how to name this:
-               aggregate_by_type::Bool = true,
+               # Allocs-specific arguments:
+               frame_for_type::Bool = true,
             )
     period = UInt64(0x1)
 
