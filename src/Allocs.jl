@@ -141,9 +141,17 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
         end
     end
 
+    type_name_cache = Dict{Any,String}()
+
+    function get_type_name(type::Any)
+        return get!(type_name_cache, type) do
+            return "Alloc: $(type)"
+        end
+    end
+
     function construct_location_for_type(typename)
         # TODO: Lol something less hacky than this:
-        return maybe_add_location(StackFrame("Alloc: $(typename)", "nothing", 0))
+        return maybe_add_location(StackFrame(get_type_name(typename), "nothing", 0))
     end
 
     for sample in alloc_profile.allocs        # convert the sample.stack to vector of location_ids
