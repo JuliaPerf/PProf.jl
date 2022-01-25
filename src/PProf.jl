@@ -352,6 +352,10 @@ end
 
 include("flamegraphs.jl")
 
+if VERSION >= v"1.8.0-DEV.1346"  # PR https://github.com/JuliaLang/julia/pull/42768
+    include("Allocs.jl")
+end
+
 
 # Precompile as much as possible, so that profiling doesn't end up measuring our own
 # compilation.

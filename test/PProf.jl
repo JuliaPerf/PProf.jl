@@ -26,9 +26,10 @@ end
 @testset "export basic profile" begin
     Profile.clear()
 
-    let x = 1
-        @profile for _ in 1:10000; x += 1; end
-        sleep(2)
+    @profile for i in 1:10000
+        # Profile compilation
+        @eval foo(x,y) = x * y + x / y
+        @eval foo($i,3)
     end
 
     # Cache profile output to test that it isn't changed
