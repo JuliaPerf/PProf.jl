@@ -173,14 +173,11 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
             1,                   # allocs
             sample.size,         # bytes
         ]
-        # TODO: Consider reporting a label? (Dangly thingy)
 
         labels = Label[
             Label(key = enter!("bytes"), num = sample.size, num_unit = enter!("bytes")),
+            Label(key = enter!("type"), str = enter!(_escape_name_for_pprof(string(sample.type))))
         ]
-        if !frame_for_type
-            push!(labels, Label(key = enter!("type"), str = enter!(_escape_name_for_pprof(string(sample.type)))))
-        end
 
         push!(prof.sample, Sample(;location_id = location_ids, value = value, label = labels))
     end
