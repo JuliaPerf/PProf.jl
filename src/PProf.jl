@@ -140,8 +140,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     samples = Vector{Sample}()
 
     sample_type = [
-        ValueType!("events",      "count"), # Mandatory
-        ValueType!("stack_depth", "count")
+        ValueType!("events", "count"), # Mandatory
+        ValueType!("cpu", "nanoseconds")
     ]
 
     period_type = ValueType!("cpu", "nanoseconds")
@@ -163,7 +163,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             # End of sample
             value = [
                 1,                   # events
-                length(location_id), # stack_depth
+                60000000             # CPU ns
             ]
             push!(samples, Sample(;location_id, value))
             location_id = Vector{eltype(data)}()
