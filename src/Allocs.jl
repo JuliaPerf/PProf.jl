@@ -18,6 +18,8 @@ using Base.StackTraces: StackFrame
 using PProf.ProtoBuf
 using PProf.OrderedCollections
 
+using ProgressMeter
+
 """
 PProf.Allocs.pprof([alloc_profile]; kwargs...)
 
@@ -154,7 +156,8 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
         return maybe_add_location(StackFrame(get_type_name(typename), "nothing", 0))
     end
 
-    for sample in alloc_profile.allocs        # convert the sample.stack to vector of location_ids
+    # convert the sample.stack to vector of location_ids
+    @showprogress "Analyzing $(length(alloc_profile.allocs)) allocation samples..." for sample in alloc_profile.allocs
         # for each location in the sample.stack, if it's the first time seeing it,
         # we also enter that location into the locations table
         location_ids = UInt64[
