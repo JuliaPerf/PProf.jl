@@ -73,7 +73,10 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     prof = PProfile(
         sample = [], location = [], _function = [],
         mapping = [], string_table = [],
-        sample_type = sample_type, default_sample_type = 2, # size
+        sample_type = sample_type,
+        # We default to allocs, since the Profile.Allocs code currently uniformly samples
+        # accross allocations, so allocs is a representative profile, while size is not.
+        default_sample_type = 1, # allocs
         period = period, period_type = ValueType!("heap", "bytes")
     )
 
