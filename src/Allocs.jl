@@ -120,6 +120,8 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                     full_name_with_args = _escape_name_for_pprof(string(frame.func))
                     funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
                 end
+                isempty(simple_name) && (simple_name = "[unknown function]")
+                isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
                 # WEIRD TRICK: By entering a separate copy of the string (with a
                 # different string id) for the name and system_name, pprof will use
                 # the supplied `name` *verbatim*, without pruning off the arguments.
