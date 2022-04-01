@@ -65,7 +65,7 @@ end
     end
     for i in 1:2
         if i == 1
-            data = Profile.fetch(include_meta = false)
+            data = Profile.fetch()
             args = (data,)
         else
             data,lidict = Profile.retrieve()
