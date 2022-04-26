@@ -103,7 +103,13 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                ui_relative_percentages::Bool = true,
             )
     if data === nothing
-        data = copy(Profile.fetch())
+        data = if isdefined(Profile, :has_meta)
+            copy(Profile.fetch(include_meta = false))
+        else
+            copy(Profile.fetch())
+        end
+    elseif isdefined(Profile, :has_meta) && Profile.has_meta(data)
+        data = Profile.strip_meta(data)
     end
     lookup = lidict
     if lookup === nothing
