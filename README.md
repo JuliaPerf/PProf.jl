@@ -64,3 +64,15 @@ Serving web UI on http://localhost:57599
 <img width=500px src="docs/graph.png" alt="graph"/>
 
 <img width=500px src="docs/flamegraph.png" alt="flamegraph"/>
+
+
+## IDE Integration
+### VSCode
+If running  `pprof` in VSCode integrated terminal and getting the following error in the Web View:
+```
+Could not execute dot; may need to install graphviz.
+``` 
+
+You can try the following:
+1. Install  [`graphviz`](https://graphviz.org/) on your local machine
+2. Install  the [`Go Profiling VSCode extension`](https://marketplace.visualstudio.com/items?itemName=MaxMedia.go-prof)
