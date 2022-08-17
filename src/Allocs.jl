@@ -54,7 +54,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     string_table = OrderedDict{AbstractString, Int64}()
     enter!(string) = _enter!(string_table, string)
     enter!(::Nothing) = _enter!(string_table, "nothing")
-    ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
+    ValueType!(_type, unit) = ValueType(enter!(_type), enter!(unit))
 
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
@@ -64,28 +64,15 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
 
     locs_map  = Dict{StackFrame, UInt64}()
     locations = Vector{Location}()
+    samples = Vector{Sample}()
 
-    sample_type = [
+    sample_type = ValueType[
         ValueType!("allocs", "count"), # Mandatory
         ValueType!("size", "bytes")
     ]
-
-    prof = PProfile(
-        sample = [], location = [], _function = [],
-        mapping = [], string_table = [],
-        sample_type = sample_type,
-        # We default to allocs, since the Profile.Allocs code currently uniformly samples
-        # accross allocations, so allocs is a representative profile, while size is not.
-        default_sample_type = 1, # allocs
-        period = period, period_type = ValueType!("heap", "bytes")
-    )
-
-    if drop_frames !== nothing
-        prof.drop_frames = enter!(drop_frames)
-    end
-    if keep_frames !== nothing
-        prof.keep_frames = enter!(keep_frames)
-    end
+    period_type = ValueType!("heap", "bytes")
+    drop_frames = isnothing(drop_frames) ? 0 : enter!(drop_frames)
+    keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
 
     function maybe_add_location(frame::StackFrame)::UInt64
         return get!(locs_map, frame) do
@@ -100,8 +87,6 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                 func_id = UInt64(length(functions) + 1)
 
                 # Store the function in our functions dict
-                funcProto = Function()
-                funcProto.id = func_id
                 file = function_name
                 simple_name = _escape_name_for_pprof(function_name)
                 local full_name_with_args
@@ -111,14 +96,13 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                     file = string(meth.file)
                     io = IOBuffer()
                     Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
-                    name = String(take!(io))
-                    full_name_with_args = _escape_name_for_pprof(name)
-                    funcProto.start_line = convert(Int64, meth.line)
+                    full_name_with_args = _escape_name_for_pprof(String(take!(io)))
+                    start_line = convert(Int64, meth.line)
                 else
                     # frame.linfo either nothing or CodeInfo, either way fallback
                     file = string(frame.file)
                     full_name_with_args = _escape_name_for_pprof(string(frame.func))
-                    funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+                    start_line = convert(Int64, frame.line) # TODO: Get start_line properly
                 end
                 isempty(simple_name) && (simple_name = "[unknown function]")
                 isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
@@ -126,23 +110,24 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                 # different string id) for the name and system_name, pprof will use
                 # the supplied `name` *verbatim*, without pruning off the arguments.
                 # So even when full_signatures == false, we want to generate two `enter!` ids.
-                funcProto.system_name = enter!(simple_name)
+                system_name = enter!(simple_name)
                 if full_signatures
-                    funcProto.name = enter!(full_name_with_args)
+                    name = enter!(full_name_with_args)
                 else
-                    funcProto.name = enter!(simple_name)
+                    name = enter!(simple_name)
                 end
                 file = Base.find_source_file(file_name)
                 file = file !== nothing ? file : file_name
-                funcProto.filename   = enter!(file)
-                push!(functions, funcProto)
+                filename   = enter!(file)
+                push!(functions, Function(func_id, name, system_name, filename, start_line))
 
                 return func_id
             end
 
-            locationProto = Location(;id = loc_id,
-                                line=[Line(function_id = function_id, line = line_number)])
-            push!(locations, locationProto)
+            push!(
+                locations,
+                Location(;id = loc_id, line=[Line(function_id, line_number)])
+            )
 
             return loc_id
         end
@@ -186,20 +171,28 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
             Label(key = enter!("bytes"), num = sample.size, num_unit = enter!("bytes")),
             Label(key = enter!("type"), str = enter!(_escape_name_for_pprof(string(sample.type))))
         ]
-
-        push!(prof.sample, Sample(;location_id = location_ids, value = value, label = labels))
+        push!(samples, Sample(;location_id = location_ids, value = value, label = labels))
     end
 
-
-    # Build Profile
-    prof.string_table = collect(keys(string_table))
     # If from_c=false funcs and locs should NOT contain C functions
-    prof._function = functions
-    prof.location  = locations
+    prof = PProfile(
+        sample_type = sample_type,
+        sample = samples,
+        location = locations,
+        var"#function" = functions,
+        string_table = collect(keys(string_table)),
+        drop_frames = drop_frames,
+        keep_frames = keep_frames,
+        period_type = period_type,
+        period = period,
+        # We default to allocs, since the Profile.Allocs code currently uniformly samples
+        # accross allocations, so allocs is a representative profile, while size is not.
+        default_sample_type = 1, # allocs
+    )
 
     # Write to disk
     open(out, "w") do io
-        writeproto(io, prof)
+        ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
     end
 
     if web

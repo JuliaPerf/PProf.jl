@@ -16,10 +16,9 @@ Alias for `Profile.clear()`
 """
 clear
 
-include(joinpath("..", "lib", "perftools.jl"))
+include(joinpath("..", "lib", "perftools", "perftools.jl"))
 
-import .perftools.profiles: ValueType, Sample, Function,
-                            Location, Line
+import .perftools.profiles: ValueType, Sample, Function, Location, Line
 const PProfile = perftools.profiles.Profile
 
 const proc = Ref{Union{Base.Process, Nothing}}(nothing)
@@ -127,7 +126,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     string_table = OrderedDict{AbstractString, Int64}()
     enter!(string) = _enter!(string_table, string)
     enter!(::Nothing) = _enter!(string_table, "nothing")
-    ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
+    ValueType!(_type, unit) = ValueType(enter!(_type), enter!(unit))
 
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
@@ -138,26 +137,16 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     seen_locs = Set{UInt64}()
     locs  = Dict{UInt64, Location}()
     locs_from_c  = Dict{UInt64, Bool}()
+    samples = Vector{Sample}()
 
     sample_type = [
         ValueType!("events",      "count"), # Mandatory
         ValueType!("stack_depth", "count")
     ]
 
-    prof = PProfile(
-        sample = [], location = [], _function = [],
-        mapping = [], string_table = [],
-        sample_type = sample_type, default_sample_type = 1, # events
-        period = sampling_delay, period_type = ValueType!("cpu", "nanoseconds")
-    )
-
-    if drop_frames !== nothing
-        prof.drop_frames = enter!(drop_frames)
-    end
-    if keep_frames !== nothing
-        prof.keep_frames = enter!(keep_frames)
-    end
-
+    period_type = ValueType!("cpu", "nanoseconds")
+    drop_frames = isnothing(drop_frames) ? 0 : enter!(drop_frames)
+    keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
     lastwaszero = true
@@ -176,7 +165,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 1,                   # events
                 length(location_id), # stack_depth
             ]
-            push!(prof.sample, Sample(;location_id = location_id, value = value))
+            push!(samples, Sample(;location_id, value))
             location_id = Vector{eltype(data)}()
             lastwaszero = true
             continue
@@ -198,7 +187,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         push!(seen_locs, ip)
 
         # Decode the IP into information about this stack frame (or frames given inlining)
-        location = Location(;id = ip, address = ip, line=[])
+        location = Location(;id = ip, address = ip)
         location_from_c = true
         # Will have multiple frames if frames were inlined (the last frame is the "real
         # function", the inlinee)
@@ -225,8 +214,6 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             push!(seen_funcs, func_id)
 
             # Store the function in our functions dict
-            funcProto = Function()
-            funcProto.id = func_id
             file = nothing
             simple_name = _escape_name_for_pprof(frame.func)
             local full_name_with_args
@@ -236,14 +223,13 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 file = string(meth.file)
                 io = IOBuffer()
                 Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
-                name = String(take!(io))
-                full_name_with_args = _escape_name_for_pprof(name)
-                funcProto.start_line = convert(Int64, meth.line)
+                full_name_with_args = _escape_name_for_pprof(String(take!(io)))
+                start_line = convert(Int64, meth.line)
             else
                 # frame.linfo either nothing or CodeInfo, either way fallback
                 file = string(frame.file)
                 full_name_with_args = _escape_name_for_pprof(string(frame.func))
-                funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+                start_line = convert(Int64, frame.line) # TODO: Get start_line properly
             end
             isempty(simple_name) && (simple_name = "[unknown function]")
             isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
@@ -251,17 +237,17 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             # different string id) for the name and system_name, pprof will use
             # the supplied `name` *verbatim*, without pruning off the arguments.
             # So even when full_signatures == false, we want to generate two `enter!` ids.
-            funcProto.system_name = enter!(simple_name)
+            system_name = enter!(simple_name)
             if full_signatures
-                funcProto.name = enter!(full_name_with_args)
+                name = enter!(full_name_with_args)
             else
-                funcProto.name = enter!(simple_name)
+                name = enter!(simple_name)
             end
             file = Base.find_source_file(file)
-            funcProto.filename   = enter!(file)
+            filename = enter!(file)
             # Only keep C functions if from_c=true
             if (from_c || !frame.from_c)
-                funcs[func_id] = funcProto
+                funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
             end
         end
         locs_from_c[ip] = location_from_c
@@ -272,15 +258,23 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         end
     end
 
-    # Build Profile
-    prof.string_table = collect(keys(string_table))
     # If from_c=false funcs and locs should NOT contain C functions
-    prof._function = collect(values(funcs))
-    prof.location  = collect(values(locs))
+    prof = PProfile(
+        sample_type = sample_type,
+        sample = samples,
+        location =  collect(values(locs)),
+        var"#function" = collect(values(funcs)),
+        string_table = collect(keys(string_table)),
+        drop_frames = drop_frames,
+        keep_frames = keep_frames,
+        period_type = period_type,
+        period = sampling_delay,
+        default_sample_type = 1, # events
+    )
 
     # Write to disk
     open(out, "w") do io
-        writeproto(io, prof)
+        ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
     end
 
     if web
