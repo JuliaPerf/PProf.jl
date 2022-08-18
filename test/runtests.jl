@@ -1,6 +1,8 @@
 using Test
 using Profile
 
+Profile.init()
+
 @testset "PProf.jl" begin
     include("PProf.jl")
 end
