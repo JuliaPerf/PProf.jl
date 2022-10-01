@@ -59,6 +59,8 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
 
+    # A map from each _function specialization_ to its ID. We map julia function
+    # specializations to PProf Functions.
     funcs_map  = Dict{String, UInt64}()
     functions = Vector{Function}()
 
@@ -75,6 +77,9 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
 
     function maybe_add_location(frame::StackFrame)::UInt64
+        @show frame
+        @show haskey(locs_map, frame)
+        #@show string(frame.func)
         return get!(locs_map, frame) do
             loc_id = UInt64(length(locations) + 1)
 
@@ -82,8 +87,13 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
             (function_name, file_name, line_number) =
                 string(frame.func), string(frame.file), frame.line
 
+            # If the frame has a `linfo`, we need to use this to distinguish it in the
+            # functions map!
+            function_key = frame.linfo !== nothing ? string(frame.linfo) : function_name
+
             # Decode the IP into information about this stack frame
-            function_id = get!(funcs_map, function_name) do
+            @show haskey(funcs_map, function_key)
+            function_id = get!(funcs_map, function_key) do
                 func_id = UInt64(length(functions) + 1)
 
                 # Store the function in our functions dict
