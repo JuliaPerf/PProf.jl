@@ -64,7 +64,10 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     funcs_map  = Dict{String, UInt64}()
     functions = Vector{Function}()
 
-    locs_map  = Dict{StackFrame, UInt64}()
+    # NOTE: It's a bug to use the actual StackFrame itself as a key in a dictionary, since
+    # different StackFrames can compare the same sometimes! 🙀 So we use its string
+    # representation as the key. See: https://github.com/JuliaPerf/PProf.jl/issues/69
+    locs_map  = Dict{String, UInt64}()
     locations = Vector{Location}()
     samples = Vector{Sample}()
 
@@ -77,10 +80,9 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
 
     function maybe_add_location(frame::StackFrame)::UInt64
-        @show frame
-        @show haskey(locs_map, frame)
-        #@show string(frame.func)
-        return get!(locs_map, frame) do
+        # See: https://github.com/JuliaPerf/PProf.jl/issues/69
+        frame_key = string(frame)
+        return get!(locs_map, frame_key) do
             loc_id = UInt64(length(locations) + 1)
 
             # Extract info from the location frame
@@ -92,12 +94,11 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
             function_key = frame.linfo !== nothing ? string(frame.linfo) : function_name
 
             # Decode the IP into information about this stack frame
-            @show haskey(funcs_map, function_key)
             function_id = get!(funcs_map, function_key) do
                 func_id = UInt64(length(functions) + 1)
 
                 # Store the function in our functions dict
-                file = function_name
+                local file
                 simple_name = _escape_name_for_pprof(function_name)
                 local full_name_with_args
                 if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
