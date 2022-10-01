@@ -11,7 +11,7 @@ import Profile  # For Profile.Allocs structures
 # Import the PProf generated protobuf types from the PProf package:
 import PProf
 using PProf.perftools.profiles: ValueType, Sample, Function, Location, Line, Label
-using PProf: _enter!, _escape_name_for_pprof
+using PProf: _enter!, _escape_name_for_pprof, method_instance_id
 const PProfile = PProf.perftools.profiles.Profile
 using Base.StackTraces: StackFrame
 
@@ -59,9 +59,9 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
 
-    # A map from each _function specialization_ to its ID. We map julia function
-    # specializations to PProf Functions.
-    funcs_map  = Dict{String, UInt64}()
+    # A map from each _function specialization_ to its proto ID. We map julia function
+    # specializations to PProf Functions. We use a hash of the function for the key.
+    funcs_map  = Dict{UInt64, UInt64}()
     functions = Vector{Function}()
 
     # NOTE: It's a bug to use the actual StackFrame itself as a key in a dictionary, since
@@ -89,9 +89,8 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
             (function_name, file_name, line_number) =
                 string(frame.func), string(frame.file), frame.line
 
-            # If the frame has a `linfo`, we need to use this to distinguish it in the
-            # functions map!
-            function_key = frame.linfo !== nothing ? string(frame.linfo) : function_name
+            # Use a unique function id for the frame:
+            function_key = method_instance_id(frame)
 
             # Decode the IP into information about this stack frame
             function_id = get!(funcs_map, function_key) do
