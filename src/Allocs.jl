@@ -11,7 +11,7 @@ import Profile  # For Profile.Allocs structures
 # Import the PProf generated protobuf types from the PProf package:
 import PProf
 using PProf.perftools.profiles: ValueType, Sample, Function, Location, Line, Label
-using PProf: _enter!, _escape_name_for_pprof
+using PProf: _enter!, _escape_name_for_pprof, method_instance_id
 const PProfile = PProf.perftools.profiles.Profile
 using Base.StackTraces: StackFrame
 
@@ -59,10 +59,15 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
 
-    funcs_map  = Dict{String, UInt64}()
+    # A map from each _function specialization_ to its proto ID. We map julia function
+    # specializations to PProf Functions. We use a hash of the function for the key.
+    funcs_map  = Dict{UInt64, UInt64}()
     functions = Vector{Function}()
 
-    locs_map  = Dict{StackFrame, UInt64}()
+    # NOTE: It's a bug to use the actual StackFrame itself as a key in a dictionary, since
+    # different StackFrames can compare the same sometimes! 🙀 So we use its string
+    # representation as the key. See: https://github.com/JuliaPerf/PProf.jl/issues/69
+    locs_map  = Dict{String, UInt64}()
     locations = Vector{Location}()
     samples = Vector{Sample}()
 
@@ -75,19 +80,24 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
 
     function maybe_add_location(frame::StackFrame)::UInt64
-        return get!(locs_map, frame) do
+        # See: https://github.com/JuliaPerf/PProf.jl/issues/69
+        frame_key = string(frame)
+        return get!(locs_map, frame_key) do
             loc_id = UInt64(length(locations) + 1)
 
             # Extract info from the location frame
             (function_name, file_name, line_number) =
                 string(frame.func), string(frame.file), frame.line
 
+            # Use a unique function id for the frame:
+            function_key = method_instance_id(frame)
+
             # Decode the IP into information about this stack frame
-            function_id = get!(funcs_map, function_name) do
+            function_id = get!(funcs_map, function_key) do
                 func_id = UInt64(length(functions) + 1)
 
                 # Store the function in our functions dict
-                file = function_name
+                local file
                 simple_name = _escape_name_for_pprof(function_name)
                 local full_name_with_args
                 if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
