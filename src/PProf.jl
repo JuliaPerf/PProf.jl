@@ -198,15 +198,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             # if any of the frames is not from_c the entire location is not from_c
             location_from_c &= frame.from_c
 
-            # `func_id` - Uniquely identifies this function (a method instance in julia, and
-            # a function in C/C++).
-            # Note that this should be unique even for several different functions all
-            # inlined into the same frame.
-            func_id = if frame.linfo !== nothing
-                hash(frame.linfo)
-            else
-                hash((frame.func, frame.file, frame.line))
-            end
+            # Use a unique function id for the frame:
+            func_id = method_instance_id(frame)
             push!(location.line, Line(function_id = func_id, line = frame.line))
 
             # Known function
@@ -291,6 +284,17 @@ function _escape_name_for_pprof(name)
     quoted = repr(string(name))
     quoted = quoted[2:thisind(quoted, end-1)]
     return quoted
+end
+function method_instance_id(frame)
+    # `func_id` - Uniquely identifies this function (a method instance in julia, and
+    # a function in C/C++).
+    # Note that this should be unique even for several different functions all
+    # inlined into the same frame.
+    func_id = if frame.linfo !== nothing
+        hash(frame.linfo)
+    else
+        hash((frame.func, frame.file, frame.line, frame.inlined))
+    end
 end
 
 """

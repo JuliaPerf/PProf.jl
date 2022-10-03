@@ -31,4 +31,36 @@ const out = tempname()
 
 end
 
+@noinline foo(x) = [x+x]
+
+@testset "Multiple method specializations" begin
+    # Warmup
+    foo(1); foo(1.0)
+
+    Profile.Allocs.clear(); @time Profile.Allocs.@profile sample_rate=1 (foo(1), foo(1.0))
+
+    # Write the profile
+    outf = PProf.Allocs.pprof(out=out, web=false)
+
+    # Read the exported profile
+    prof = open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), outf, "r")
+
+    # Test for both functions:
+    @test in("foo(::Float64)", prof.string_table)
+    @test in("foo(::Int64)", prof.string_table)
+
+    # Test that they are both present in the locations table:
+    int_str_idx = findfirst(==("foo(::Int64)"), prof.string_table) - 1
+    float_str_idx = findfirst(==("foo(::Float64)"), prof.string_table) - 1
+
+    int_func = findfirst(f->f.name == int_str_idx, prof.var"#function")
+    float_func = findfirst(f->f.name == float_str_idx, prof.var"#function")
+
+    int_loc = findfirst(l->l.line[1].function_id == int_func, prof.location)
+    float_loc = findfirst(l->l.line[1].function_id == float_func, prof.location)
+
+    @test int_loc !== nothing
+    @test float_loc !== nothing
+end
+
 end  # module PProfAllocsTest
