@@ -7,6 +7,7 @@ using ProtoBuf
 using OrderedCollections
 using CodecZlib
 import pprof_jll
+import Graphviz_jll
 
 using Profile: clear
 
@@ -378,7 +379,9 @@ function refresh(; webhost::AbstractString = "localhost",
     relative_percentages_flag = ui_relative_percentages ? "-relative_percentages" : ""
 
     proc[] = pprof_jll.pprof() do pprof_path
-        open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
+        Graphviz_jll.dot() do dot_path
+            open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
+        end
     end
 end
 
