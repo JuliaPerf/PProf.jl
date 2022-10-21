@@ -75,7 +75,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
         ValueType!("allocs", "count"), # Mandatory
         ValueType!("size", "bytes")
     ]
-    period_type = ValueType!("heap", "bytes")
+    period_type = ValueType!("size", "bytes")
     drop_frames = isnothing(drop_frames) ? 0 : enter!(drop_frames)
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
 
@@ -136,7 +136,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
 
             push!(
                 locations,
-                Location(;id = loc_id, line=[Line(function_id, line_number)])
+                Location(;id = loc_id, line=[Line(function_id, line_number > 0 ? line_number : 1)])
             )
 
             return loc_id
