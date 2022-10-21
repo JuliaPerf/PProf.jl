@@ -200,7 +200,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
             # Use a unique function id for the frame:
             func_id = method_instance_id(frame)
-            push!(location.line, Line(function_id = func_id, line = frame.line))
+            line_struct = Line(function_id = func_id, line = frame.line > 0 ? frame.line : 1)
+            push!(location.line, line_struct)
 
             # Known function
             func_id in seen_funcs && continue
