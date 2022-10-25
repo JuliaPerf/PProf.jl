@@ -331,7 +331,7 @@ function refresh(; webhost::AbstractString = "localhost",
 end
 
 """
-    pprof_kill()
+    PProf.kill()
 
 Kills the pprof server if running.
 """
