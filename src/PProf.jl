@@ -217,7 +217,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 file = string(meth.file)
                 io = IOBuffer()
                 Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
-                full_name_with_args = _escape_name_for_pprof(String(take!(io)))
+                call_str = String(take!(io))
+                full_name_with_args = _escape_name_for_pprof("$(meth.module).$call_str")
                 start_line = convert(Int64, meth.line)
             else
                 # frame.linfo either nothing or CodeInfo, either way fallback
