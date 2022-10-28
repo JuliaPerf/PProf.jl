@@ -150,7 +150,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
     lastwaszero = true
-
+    
     for ip in data
         # ip == 0x0 is the sentinel value for finishing a backtrace, therefore finising a sample
         if ip == 0
@@ -163,7 +163,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             # End of sample
             value = [
                 1,                   # events
-                60000000             # CPU ns
+                sampling_delay       # CPU ns
             ]
             push!(samples, Sample(;location_id, value))
             location_id = Vector{eltype(data)}()
