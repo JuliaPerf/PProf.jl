@@ -1,7 +1,5 @@
 # PProf.jl
-
-[![Build Status](https://travis-ci.com/vchuravy/PProf.jl.svg?branch=master)](https://travis-ci.com/vchuravy/PProf.jl)
-
+[![CI][ci-img]][ci-url]
 
 *Sometimes I need a hammer, sometimes I need a drill, this is a hammer-drill*
 
@@ -75,3 +73,6 @@ Serving web UI on http://localhost:57599
 <img width=500px src="docs/graph.png" alt="graph"/>
 
 <img width=500px src="docs/flamegraph.png" alt="flamegraph"/>
+
+[ci-img]: https://github.com/JuliaPerf/PProf.jl/actions/workflows/CI.yml/badge.svg?branch=master
+[ci-url]: https://github.com/JuliaPerf/PProf.jl/actions/workflows/CI.yml
