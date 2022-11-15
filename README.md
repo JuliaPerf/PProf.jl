@@ -9,7 +9,8 @@
 using Profile
 using PProf
 
-# collect a profile
+# Collect a profile
+Profile.clear()
 @profile peakflops()
 
 # Export pprof profile and open interactive profiling web interface.
@@ -17,6 +18,16 @@ pprof()
 ```
 
 This prints a link to a local webserver where you can inspect the profile you've collected. It produces a file called `profile.pb.gz` in the [`pprof`](https://github.com/google/pprof) format, and then opens the `pprof` tool in interactive "web" mode.
+
+To profile allocations instead of CPU time, simply use the equivalent functions from the `Allocs` submodules instead:
+```julia
+# Collect an allocation profile
+Profile.Allocs.clear()
+Profile.Allocs.@profile peakflops()
+
+# Export pprof allocation profile and open interactive profiling web interface.
+PProf.Allocs.pprof()
+```
 
 For more usage examples see the pprof docs: https://github.com/google/pprof/blob/master/doc/README.md
 
