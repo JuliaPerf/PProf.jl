@@ -17,7 +17,7 @@ pprof()
 
 This prints a link to a local webserver where you can inspect the profile you've collected. It produces a file called `profile.pb.gz` in the [`pprof`](https://github.com/google/pprof) format, and then opens the `pprof` tool in interactive "web" mode.
 
-To profile allocations instead of CPU time, simply use the equivalent functions from the `Allocs` submodules instead:
+To profile allocations instead of CPU time, simply use the equivalent functions from the `Allocs` submodule instead:
 ```julia
 # Collect an allocation profile
 Profile.Allocs.clear()
