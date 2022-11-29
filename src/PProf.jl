@@ -342,17 +342,18 @@ function kill()
     end
 end
 
-
 """
     @pprof ex
+    @pprof ex pr = (sample_rate = 1,) pp = (from_c = false,)
 
-Profiles the expression using `@profile` and starts or restarts the `pprof()` web UI with
-default arguments.
+Profiles the expression using `@profile` and starts or restarts the `pprof()` web UI.
+pr and pp are @profile and @pprof arguments and/or keyword arguments, respectively.
 """
-macro pprof(ex)
+macro pprof(ex, pr=(), pp=())
     esc(quote
-        $Profile.@profile $ex
-        $(@__MODULE__).pprof()
+        $Profile.clear()
+        $Profile.@profile $pr... $ex
+        $(@__MODULE__).pprof(; $pp...)
     end)
 end
 
