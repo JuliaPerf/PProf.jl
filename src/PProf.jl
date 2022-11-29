@@ -344,14 +344,14 @@ end
 
 """
     @pprof ex
-    @pprof ex pr = (sample_rate = 1,) pp = (from_c = false,)
+    @pprof ex pp = (from_c = false,)
 
 Profiles the expression using `@profile` and starts or restarts the `pprof()` web UI.
-pr and pp are @profile and @pprof arguments and/or keyword arguments, respectively.
+pp is for @pprof keyword arguments.
 """
-macro pprof(ex, pr=(), pp=())
+macro pprof(ex, pp=())
     esc(quote
-        $@profile $pr... $ex
+        $Profile.@profile $ex
         $(@__MODULE__).pprof(; $pp...)
     end)
 end
