@@ -223,7 +223,6 @@ pr and pp are Allocs.@profile and Allocs.@pprof arguments and/or keyword argumen
 """
 macro pprof(ex, pr=(), pp=())
     esc(quote
-        $Profile.Allocs.clear()
         $Profile.Allocs.@profile $pr... $ex
         $(@__MODULE__).pprof(; $pp...)
     end)

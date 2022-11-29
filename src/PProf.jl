@@ -351,8 +351,7 @@ pr and pp are @profile and @pprof arguments and/or keyword arguments, respective
 """
 macro pprof(ex, pr=(), pp=())
     esc(quote
-        $Profile.clear()
-        $Profile.@profile $pr... $ex
+        $@profile $pr... $ex
         $(@__MODULE__).pprof(; $pp...)
     end)
 end
