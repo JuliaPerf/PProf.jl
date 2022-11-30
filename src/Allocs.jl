@@ -214,4 +214,17 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     out
 end
 
+"""
+    Allocs.@pprof ex 1.0
+    Allocs.@pprof ex 0.5 from_c = false
+
+Allocation profiles the expression using `Allocs.@profile` and starts or restarts the `Allocs.pprof()` web UI.
+"""
+macro pprof(ex, sa, ar_...)
+    esc(quote
+        $Profile.Allocs.@profile sample_rate = $sa $ex
+        $(@__MODULE__).pprof(; $(ar_...))
+    end)
+end
+
 end  # module Allocs

@@ -342,17 +342,16 @@ function kill()
     end
 end
 
-
 """
     @pprof ex
+    @pprof ex from_c = false
 
-Profiles the expression using `@profile` and starts or restarts the `pprof()` web UI with
-default arguments.
+Profiles the expression using `@profile` and starts or restarts the `pprof()` web UI.
 """
-macro pprof(ex)
+macro pprof(ex, ar_...)
     esc(quote
         $Profile.@profile $ex
-        $(@__MODULE__).pprof()
+        $(@__MODULE__).pprof(; $(ar_...))
     end)
 end
 
