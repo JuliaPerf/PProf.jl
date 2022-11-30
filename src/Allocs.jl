@@ -215,19 +215,16 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
 end
 
 """
-    Allocs.@pprof ex
-    Allocs.@pprof ex pr = (sample_rate = 1,) pp = (from_c = false,)
+    Allocs.@pprof ex 1.0
+    Allocs.@pprof ex 0.5 from_c = false
 
 Allocation profiles the expression using `Allocs.@profile` and starts or restarts the `Allocs.pprof()` web UI.
-pr is for Allocs.@profile arguments.
-pp is for @pprof keyword arguments.
 """
-macro pprof(ex, pr=(), pp=())
+macro pprof(ex, sa, ar_...)
     esc(quote
-        $Profile.Allocs.@profile $pr... $ex
-        $(@__MODULE__).pprof(; $pp...)
+        $Profile.Allocs.@profile sample_rate = $sa $ex
+        $(@__MODULE__).pprof(; $(ar_...))
     end)
 end
-
 
 end  # module Allocs

@@ -344,15 +344,14 @@ end
 
 """
     @pprof ex
-    @pprof ex pp = (from_c = false,)
+    @pprof ex from_c = false
 
 Profiles the expression using `@profile` and starts or restarts the `pprof()` web UI.
-pp is for @pprof keyword arguments.
 """
-macro pprof(ex, pp=())
+macro pprof(ex, ar_...)
     esc(quote
         $Profile.@profile $ex
-        $(@__MODULE__).pprof(; $pp...)
+        $(@__MODULE__).pprof(; $(ar_...))
     end)
 end
 
