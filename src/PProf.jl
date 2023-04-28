@@ -5,6 +5,7 @@ export pprof, @pprof
 using Profile
 using ProtoBuf
 using OrderedCollections
+using CodecZlib
 import pprof_jll
 
 using Profile: clear
@@ -266,8 +267,11 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     )
 
     # Write to disk
-    open(out, "w") do io
+    io = GzipCompressorStream(open(out, "w"))
+    try
         ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+    finally
+        close(io)
     end
 
     if web

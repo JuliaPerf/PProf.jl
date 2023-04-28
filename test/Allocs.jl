@@ -3,6 +3,7 @@ module PProfAllocsTest
 import PProf
 import Profile
 using ProtoBuf
+using CodecZlib
 
 using Test
 
@@ -20,7 +21,12 @@ const out = tempname()
     outf = PProf.Allocs.pprof(out=out, web=false)
 
     # Read the exported profile
-    prof = open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), outf, "r")
+    io = GzipDecompressorStream(open(outf, "r"))
+    try
+        prof = decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
+    finally
+        close(io)
+    end
 
     # Verify that we exported stack trace samples:
     @test length(prof.sample) > 0

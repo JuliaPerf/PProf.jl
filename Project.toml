@@ -5,6 +5,7 @@ version = "2.2.2"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
 EnumX = "4e289a0a-7415-4d19-859d-a7e5c4648b56"
 FlameGraphs = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -23,6 +24,7 @@ ProgressMeter = "1.7"
 ProtoBuf = "1"
 julia = "1.6"
 pprof_jll = "0.1, 1"
+CodecZlib = "0.7"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
