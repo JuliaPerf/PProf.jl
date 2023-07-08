@@ -44,10 +44,9 @@ ERROR: LoadError: Some tests did not pass: 1 passed, 2 failed, 0 errored, 0 brok
 in expression starting at /Users/nathandaly/.julia/dev/PProf/test/golden/regression_test.jl:32
 =#
 
-
-
 using Profile, PProf
 using Test, Revise
+using InteractiveUtils: peakflops
 
 # Make sure that there's no local diffs (grep returns -1 if empty)
 @assert !success(pipeline(`git status --porcelain=v1`,`grep -v '^??'`))
