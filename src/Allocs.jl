@@ -219,7 +219,4 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     out
 end
 
-function hash_frame(frame::StackFrame)
-end
-
 end  # module Allocs
