@@ -68,7 +68,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     # different StackFrames can compare the same sometimes! 🙀 So we manually compute an ID
     # representation as the key. See: https://github.com/JuliaPerf/PProf.jl/issues/69
     # (We previously stringified the function, but that is very slow.)
-    locs_map  = Dict{UInt64, UInt64}()
+    locs_map  = Dict{Any, UInt64}()
     locations = Vector{Location}()
     samples = Vector{Sample}()
 
@@ -82,13 +82,17 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
 
     function maybe_add_location(frame::StackFrame)::UInt64
         # See: https://github.com/JuliaPerf/PProf.jl/issues/69
-        frame_key = method_instance_id(frame)
+        function_key = method_instance_id(frame)
+        line_number = frame.line
+        # For allocations profile, we uniquely identify each frame position by
+        # (function,line_number) pairs. That identifies a position in the code.
+        frame_key = (function_key, line_number)
         return get!(locs_map, frame_key) do
             loc_id = UInt64(length(locations) + 1)
 
             # Extract info from the location frame
-            (function_name, file_name, line_number) =
-                string(frame.func), string(frame.file), frame.line
+            (function_name, file_name) =
+                string(frame.func), string(frame.file)
 
             # Use a unique function id for the frame:
             function_key = method_instance_id(frame)
