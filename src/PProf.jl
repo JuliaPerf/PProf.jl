@@ -284,12 +284,11 @@ function method_instance_id(frame)
     # a function in C/C++).
     # Note that this should be unique even for several different functions all
     # inlined into the same frame.
-    # Some frames have only a linfo. Some have only the other fields and no linfo. Some have
-    # all of these fields. We want to keep all such frames unique.
-    # (Often a function will show up in pairs in the stacktrace - the first frame is the
-    # julia method instance, and the second frame is the generated C function. The generated
-    # C function will only have a linfo. We want to keep these separate.)
-    return hash((frame.linfo, frame.func, frame.file, frame.line, frame.inlined))
+    func_id = if frame.linfo !== nothing
+        hash(frame.linfo)
+    else
+        hash((frame.func, frame.file, frame.line, frame.inlined))
+    end
 end
 
 """
