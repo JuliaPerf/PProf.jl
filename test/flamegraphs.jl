@@ -44,8 +44,8 @@ end
 
     # Read the exported profile
     io = GzipDecompressorStream(open(outf, "r"))
-    try
-        fg_prof = decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
+    fg_prof = try
+        decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
     finally
         close(io)
     end
