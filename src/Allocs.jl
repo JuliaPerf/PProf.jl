@@ -65,9 +65,10 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     functions = Vector{Function}()
 
     # NOTE: It's a bug to use the actual StackFrame itself as a key in a dictionary, since
-    # different StackFrames can compare the same sometimes! 🙀 So we use its string
+    # different StackFrames can compare the same sometimes! 🙀 So we manually compute an ID
     # representation as the key. See: https://github.com/JuliaPerf/PProf.jl/issues/69
-    locs_map  = Dict{String, UInt64}()
+    # (We previously stringified the function, but that is very slow.)
+    locs_map  = Dict{UInt64, UInt64}()
     locations = Vector{Location}()
     samples = Vector{Sample}()
 
@@ -81,7 +82,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
 
     function maybe_add_location(frame::StackFrame)::UInt64
         # See: https://github.com/JuliaPerf/PProf.jl/issues/69
-        frame_key = string(frame)
+        frame_key = method_instance_id(frame)
         return get!(locs_map, frame_key) do
             loc_id = UInt64(length(locations) + 1)
 
@@ -212,6 +213,9 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     end
 
     out
+end
+
+function hash_frame(frame::StackFrame)
 end
 
 end  # module Allocs
