@@ -60,7 +60,12 @@ end
 
 function load_prof_proto(file)
     @show file
-    open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), file, "r")
+    io = GzipDecompressorStream(open(file, "r"))
+    fg_prof = try
+        decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
+    finally
+        close(io)
+    end
 end
 
 @testset "with_c" begin
