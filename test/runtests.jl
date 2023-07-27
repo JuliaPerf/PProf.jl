@@ -15,4 +15,8 @@ end
     @testset "Allocs.jl" begin
         include("Allocs.jl")
     end
+
+    @testset "Regression tests" begin
+        include("golden/regression_test.jl")
+    end
 end

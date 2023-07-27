@@ -24,6 +24,8 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # To support cross-branch testing in regression tests
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
