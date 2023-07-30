@@ -49,6 +49,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                skip_gc_internal::Bool = true,
                frame_for_type::Bool = true,
             )
+    PProf.log_greeting(skip_jl_dispatch)
     period = UInt64(0x1)
 
     @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"

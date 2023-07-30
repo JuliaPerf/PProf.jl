@@ -107,6 +107,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                skip_jl_dispatch::Bool = false,
                skip_gc_internal::Bool = false,
             )
+    log_greeting(skip_jl_dispatch)
     if data === nothing
         data = if isdefined(Profile, :has_meta)
             copy(Profile.fetch(include_meta = false))
@@ -299,6 +300,22 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     out
 end
 
+log_once::Bool = false
+function log_greeting(skip_jl_dispatch)
+    if !log_once
+        global log_once = true
+        if !skip_jl_dispatch
+            @info """👋  Welcome to PProf!
+
+            Consider trying `skip_jl_dispatch = true` as well, for a cleaner Graph view.
+            The current options are best for the Flamegraph view.
+
+            Now outputting your profile...
+            """
+        end
+    end
+end
+
 function _escape_name_for_pprof(name)
     # HACK: Apparently proto doesn't escape func names with `"` in them ... >.<
     # TODO: Remove this hack after https://github.com/google/pprof/pull/564
@@ -384,6 +401,8 @@ function refresh(; webhost::AbstractString = "localhost",
     proc[] = pprof_jll.pprof() do pprof_path
         open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
     end
+
+    sleep(1)  # Wait for the server to start. This is usually long enough.
 end
 
 """
