@@ -81,6 +81,16 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
 - `ui_relative_percentages`: Passes `-relative_percentages` to pprof. Causes nodes
   ignored/hidden through the web UI to be ignored from totals when computing percentages.
+- `skip_julia_dispatch_frames::Bool = false`: If true, we hide the internal frames from
+  julia dynamic dispatch: `jl_apply_generic`, `jl_apply`, `jl_invoke`, etc. This helps a lot
+  in the Graph view, because otherwise they imply a false recursion in your program when
+  there are multiple dynamic dispatches in your stacktrace. However, the dispatches can be
+  very useful in the flamegraph view, since they often represent performance problems. So
+  consider switching this based on which pprof UI view you're using.
+- `skip_gc_internal_frames::Bool = false`: Provided for consistency with PProf.Alloc.pprof().
+  True by default, since this would only be present when running an Alloc profile at the
+  same time, and you may want to know the impact of that on your CPU profile. See
+  [`PProf.Alloc.pprof`](@ref).
 """
 function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                lidict::Union{Nothing, Dict} = nothing;
@@ -94,6 +104,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                drop_frames::Union{Nothing, AbstractString} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
+               skip_julia_dispatch_frames::Bool = false,
+               skip_gc_internal_frames::Bool = false,
             )
     if data === nothing
         data = if isdefined(Profile, :has_meta)
@@ -127,10 +139,11 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     # Functions need a uid, we'll use the pointer for the method instance
     seen_funcs = Set{UInt64}()
     funcs = Dict{UInt64, Function}()
+    funcs_to_skip = Set{UInt64}()
 
     seen_locs = Set{UInt64}()
     locs  = Dict{UInt64, Location}()
-    locs_from_c  = Dict{UInt64, Bool}()
+    locs_to_skip = Set{UInt64}()
     samples = Vector{Sample}()
 
     sample_type = [
@@ -173,7 +186,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # if we have already seen this IP avoid decoding it again
         if ip in seen_locs
             # Only keep C frames if from_c=true
-            if (from_c || !locs_from_c[ip])
+            if !(ip in locs_to_skip)
                 push!(location_id, ip)
             end
             continue
@@ -183,6 +196,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # Decode the IP into information about this stack frame (or frames given inlining)
         location = Location(;id = ip, address = ip)
         location_from_c = true
+        should_keep_location = false
         # Will have multiple frames if frames were inlined (the last frame is the "real
         # function", the inlinee)
         for frame in lookup[ip]
@@ -194,10 +208,13 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
             # Use a unique function id for the frame:
             func_id = method_instance_id(frame)
-            push!(location.line, Line(function_id = func_id, line = frame.line))
 
             # Known function
-            func_id in seen_funcs && continue
+            if func_id in seen_funcs && !(func_id in funcs_to_skip)
+                should_keep_location = true
+                push!(location.line, Line(function_id = func_id, line = frame.line))
+                continue
+            end
             push!(seen_funcs, func_id)
 
             # Store the function in our functions dict
@@ -220,6 +237,15 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             end
             isempty(simple_name) && (simple_name = "[unknown function]")
             isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
+
+            # Only keep C functions if from_c=true, and it's not a skipped internal frame.
+            if !should_keep_frame(from_c, skip_julia_dispatch_frames,
+                    skip_gc_internal_frames, frame, simple_name)
+                push!(funcs_to_skip, func_id)
+                continue
+            end
+            should_keep_location = true
+
             # WEIRD TRICK: By entering a separate copy of the string (with a
             # different string id) for the name and system_name, pprof will use
             # the supplied `name` *verbatim*, without pruning off the arguments.
@@ -232,16 +258,17 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             end
             file = Base.find_source_file(file)
             filename = enter!(file)
-            # Only keep C functions if from_c=true
-            if (from_c || !frame.from_c)
-                funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
-            end
+
+            # Save the new function to the Location
+            funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
+            push!(location.line, Line(function_id = func_id, line = frame.line))
         end
-        locs_from_c[ip] = location_from_c
-        # Only keep C frames if from_c=true
-        if (from_c || !location_from_c)
+        # If any of the frames were kept, save the location
+        if should_keep_location
             locs[ip] = location
             push!(location_id, ip)
+        else
+            push!(locs_to_skip, ip)
         end
     end
 
@@ -289,6 +316,41 @@ function method_instance_id(frame)
     else
         hash((frame.func, frame.file, frame.line, frame.inlined))
     end
+end
+
+function should_keep_frame(from_c, no_jl, no_gc, frame, name)
+    if ((from_c || !frame.from_c)
+        && !(no_jl && is_julia_dispatch_internal(name))
+        && !(no_gc && is_gc_internal(name)))
+        return true
+    end
+    return false
+end
+function is_julia_dispatch_internal(name)
+    return name in (
+        "jl_apply",
+        "_jl_apply",
+        "jl_invoke",
+        "_jl_invoke",
+        "jl_apply_generic",
+        "_jl_apply_generic",
+        "ijl_apply_generic",
+    )
+end
+function is_gc_internal(name)
+    return name in (
+        "jl_gc_alloc",
+        "jl_gc_alloc_",
+        "jl_gc_pool_alloc",
+        "jl_gc_big_alloc",
+        "jl_gc_alloc_typed",
+        "ijl_gc_pool_alloc",
+        "ijl_gc_big_alloc",
+        "ijl_gc_alloc_typed",
+        "ijl_gc_pool_alloc_instrumented",
+        "ijl_gc_big_alloc_instrumented",
+        "maybe_record_alloc_to_profile",
+    )
 end
 
 """
