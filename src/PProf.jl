@@ -300,9 +300,9 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     out
 end
 
-log_once::Bool = false
+log_once = false
 function log_greeting(skip_jl_dispatch)
-    if !log_once
+    if !(log_once::Bool)
         global log_once = true
         if !skip_jl_dispatch
             @info """👋  Welcome to PProf!
