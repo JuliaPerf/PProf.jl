@@ -12,8 +12,8 @@ const out = tempname()
     Profile.Allocs.clear()
     Profile.Allocs.@profile sample_rate=1.0 begin
         # Profile compilation
-        @eval foo(x,y) = x * y + y / x
-        @eval foo(2, 3)
+        @eval $(Symbol("foo_alloc$i"))(x,y) = x * y + x / y
+        @eval $(Symbol("foo_alloc$i"))($i,3)
     end
 
     # Write the profile
