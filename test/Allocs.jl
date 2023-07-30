@@ -87,8 +87,8 @@ end
 
     args = (; out=tempname(), web=false)
     matches(r, proto) = any(s->occursin(r, s), proto.string_table)
-    @test matches("maybe_record_alloc_to_profile", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=false)))
-    @test !matches("maybe_record_alloc_to_profile", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=true)))
+    @test matches(r"jl_gc_.*alloc", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=false)))
+    @test !matches(r"jl_gc_.*alloc", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=true)))
 end
 
 
