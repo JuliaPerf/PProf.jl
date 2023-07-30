@@ -28,10 +28,10 @@ The `kwargs` are the same as [`PProf.pprof`](@ref), except:
   of every allocation. Note that this tends to make the Graph view harder to
   read, because it's over-aggregated, so we recommend filtering out the `Type:`
   nodes in the PProf web UI.
-- `skip_gc_internal_frames::Bool = true`: By default, we hide the tail-end of the
+- `skip_gc_internal::Bool = true`: By default, we hide the tail-end of the
   stacktrace because it's not very useful. *Every* frame ends with some `jl_gc_*_alloc`,
   which calls `maybe_record_alloc_to_profile`, which is distracting in Profile viewer.
-  This is similar to `skip_julia_dispatch_frames` in the default CPU pprof() function.
+  This is similar to `skip_jl_dispatch` in the default CPU pprof() function.
 """
 function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch()
                ;
@@ -44,9 +44,9 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
                full_signatures::Bool = true,
-               skip_julia_dispatch_frames::Bool = false,
+               skip_jl_dispatch::Bool = false,
                # Allocs-specific arguments:
-               skip_gc_internal_frames::Bool = true,
+               skip_gc_internal::Bool = true,
                frame_for_type::Bool = true,
             )
     period = UInt64(0x1)
@@ -132,8 +132,8 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                 isempty(simple_name) && (simple_name = "[unknown function]")
                 isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
 
-                if !PProf.should_keep_frame(from_c, skip_julia_dispatch_frames,
-                        skip_gc_internal_frames, frame, simple_name)
+                if !PProf.should_keep_frame(from_c, skip_jl_dispatch,
+                        skip_gc_internal, frame, simple_name)
                     success[] = false
                     push!(funcs_to_skip, function_key)
                     return 0

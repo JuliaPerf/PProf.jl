@@ -98,13 +98,13 @@ end
     @test load_prof_proto(pprof(out=tempname(), web=false, keep_frames = "foo")).keep_frames != 0
 end
 
-@testset "skip_julia_dispatch_frames" begin
+@testset "skip_jl_dispatch" begin
     Profile.clear()
     @profile Base.inferencebarrier(foo)(1000000, 5, [])
     args = (; out=tempname(), web=false)
     matches(r, proto) = any(s->occursin(r, s), proto.string_table)
-    @test matches(r"jl_apply_generic", load_prof_proto(pprof(;args..., skip_julia_dispatch_frames=false)))
-    @test !matches(r"jl_apply_generic", load_prof_proto(pprof(;args..., skip_julia_dispatch_frames=true)))
+    @test matches(r"jl_apply_generic", load_prof_proto(pprof(;args..., skip_jl_dispatch=false)))
+    @test !matches(r"jl_apply_generic", load_prof_proto(pprof(;args..., skip_jl_dispatch=true)))
 end
 
 @testset "@pprof macro" begin

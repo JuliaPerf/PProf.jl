@@ -68,21 +68,21 @@ function load_prof_proto(file)
     open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), file, "r")
 end
 
-@testset "skip_julia_dispatch_frames" begin
+@testset "skip_jl_dispatch" begin
     Profile.Allocs.clear();
     Profile.Allocs.@profile sample_rate=1 Base.inferencebarrier(foo)(1)
     args = (; out=tempname(), web=false)
     matches(r, proto) = any(s->occursin(r, s), proto.string_table)
-    @test matches(r"jl_apply_generic", load_prof_proto(PProf.Allocs.pprof(;args..., skip_julia_dispatch_frames=false)))
-    @test !matches(r"jl_apply_generic", load_prof_proto(PProf.Allocs.pprof(;args..., skip_julia_dispatch_frames=true)))
+    @test matches(r"jl_apply_generic", load_prof_proto(PProf.Allocs.pprof(;args..., skip_jl_dispatch=false)))
+    @test !matches(r"jl_apply_generic", load_prof_proto(PProf.Allocs.pprof(;args..., skip_jl_dispatch=true)))
 end
-@testset "skip_gc_internal_frames" begin
+@testset "skip_gc_internal" begin
     Profile.Allocs.clear();
     Profile.Allocs.@profile sample_rate=1 Base.inferencebarrier(foo)(1)
     args = (; out=tempname(), web=false)
     matches(r, proto) = any(s->occursin(r, s), proto.string_table)
-    @test matches(r"maybe_record_alloc_to_profile", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal_frames=false)))
-    @test !matches(r"maybe_record_alloc_to_profile", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal_frames=true)))
+    @test matches(r"maybe_record_alloc_to_profile", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=false)))
+    @test !matches(r"maybe_record_alloc_to_profile", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=true)))
 end
 
 

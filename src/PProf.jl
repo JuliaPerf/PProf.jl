@@ -81,13 +81,13 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
 - `ui_relative_percentages`: Passes `-relative_percentages` to pprof. Causes nodes
   ignored/hidden through the web UI to be ignored from totals when computing percentages.
-- `skip_julia_dispatch_frames::Bool = false`: If true, we hide the internal frames from
+- `skip_jl_dispatch::Bool = false`: If true, we hide the internal frames from
   julia dynamic dispatch: `jl_apply_generic`, `jl_apply`, `jl_invoke`, etc. This helps a lot
   in the Graph view, because otherwise they imply a false recursion in your program when
   there are multiple dynamic dispatches in your stacktrace. However, the dispatches can be
   very useful in the flamegraph view, since they often represent performance problems. So
   consider switching this based on which pprof UI view you're using.
-- `skip_gc_internal_frames::Bool = false`: Provided for consistency with PProf.Alloc.pprof().
+- `skip_gc_internal::Bool = false`: Provided for consistency with PProf.Alloc.pprof().
   True by default, since this would only be present when running an Alloc profile at the
   same time, and you may want to know the impact of that on your CPU profile. See
   [`PProf.Alloc.pprof`](@ref).
@@ -104,8 +104,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                drop_frames::Union{Nothing, AbstractString} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
-               skip_julia_dispatch_frames::Bool = false,
-               skip_gc_internal_frames::Bool = false,
+               skip_jl_dispatch::Bool = false,
+               skip_gc_internal::Bool = false,
             )
     if data === nothing
         data = if isdefined(Profile, :has_meta)
@@ -239,8 +239,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
 
             # Only keep C functions if from_c=true, and it's not a skipped internal frame.
-            if !should_keep_frame(from_c, skip_julia_dispatch_frames,
-                    skip_gc_internal_frames, frame, simple_name)
+            if !should_keep_frame(from_c, skip_jl_dispatch,
+                    skip_gc_internal, frame, simple_name)
                 push!(funcs_to_skip, func_id)
                 continue
             end
