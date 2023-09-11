@@ -28,8 +28,8 @@ end
 
     @profile for i in 1:10000
         # Profile compilation
-        @eval foo(x,y) = x * y + x / y
-        @eval foo($i,3)
+        @eval $(Symbol("foo$i"))(x,y) = x * y + x / y
+        @eval $(Symbol("foo$i"))($i,3)
     end
 
     # Cache profile output to test that it isn't changed
@@ -96,6 +96,15 @@ end
 @testset "drop_frames/keep_frames" begin
     @test load_prof_proto(pprof(out=tempname(), web=false, drop_frames = "foo")).drop_frames != 0
     @test load_prof_proto(pprof(out=tempname(), web=false, keep_frames = "foo")).keep_frames != 0
+end
+
+@testset "skip_jl_dispatch" begin
+    Profile.clear()
+    @profile Base.inferencebarrier(foo)(1000000, 5, [])
+    args = (; out=tempname(), web=false)
+    matches(r, proto) = any(s->occursin(r, s), proto.string_table)
+    @test matches(r"jl_apply_generic", load_prof_proto(pprof(;args..., skip_jl_dispatch=false)))
+    @test !matches(r"jl_apply_generic", load_prof_proto(pprof(;args..., skip_jl_dispatch=true)))
 end
 
 @testset "@pprof macro" begin

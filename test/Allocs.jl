@@ -12,8 +12,8 @@ const out = tempname()
     Profile.Allocs.clear()
     Profile.Allocs.@profile sample_rate=1.0 begin
         # Profile compilation
-        @eval foo(x,y) = x * y + y / x
-        @eval foo(2, 3)
+        @eval foo_alloc(x,y) = x * y + x / y
+        @eval foo_alloc(1,3)
     end
 
     # Write the profile
@@ -62,5 +62,35 @@ end
     @test int_loc !== nothing
     @test float_loc !== nothing
 end
+
+function load_prof_proto(file)
+    @show file
+    open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), file, "r")
+end
+
+@testset "skip_jl_dispatch" begin
+    Profile.Allocs.clear();
+    Profile.Allocs.@profile sample_rate=1 Base.inferencebarrier(foo)(1)
+
+    @assert length(Profile.Allocs.fetch().allocs) > 0
+
+    args = (; out=tempname(), web=false)
+    matches(r, proto) = any(s->occursin(r, s), proto.string_table)
+    @test matches("jl_apply_generic", load_prof_proto(PProf.Allocs.pprof(;args..., skip_jl_dispatch=false)))
+    @test !matches("jl_apply_generic", load_prof_proto(PProf.Allocs.pprof(;args..., skip_jl_dispatch=true)))
+end
+@testset "skip_gc_internal" begin
+    Profile.Allocs.clear();
+    Profile.Allocs.@profile sample_rate=1 Base.inferencebarrier(foo)(1)
+
+    @assert length(Profile.Allocs.fetch().allocs) > 0
+
+    args = (; out=tempname(), web=false)
+    matches(r, proto) = any(s->occursin(r, s), proto.string_table)
+    @test matches(r"jl_gc_.*alloc", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=false)))
+    @test !matches(r"jl_gc_.*alloc", load_prof_proto(PProf.Allocs.pprof(;args..., skip_gc_internal=true)))
+end
+
+
 
 end  # module PProfAllocsTest

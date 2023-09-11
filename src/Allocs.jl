@@ -28,6 +28,10 @@ The `kwargs` are the same as [`PProf.pprof`](@ref), except:
   of every allocation. Note that this tends to make the Graph view harder to
   read, because it's over-aggregated, so we recommend filtering out the `Type:`
   nodes in the PProf web UI.
+- `skip_gc_internal::Bool = true`: By default, we hide the tail-end of the
+  stacktrace because it's not very useful. *Every* frame ends with some `jl_gc_*_alloc`,
+  which calls `maybe_record_alloc_to_profile`, which is distracting in Profile viewer.
+  This is similar to `skip_jl_dispatch` in the default CPU pprof() function.
 """
 function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch()
                ;
@@ -40,9 +44,12 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
                full_signatures::Bool = true,
+               skip_jl_dispatch::Bool = false,
                # Allocs-specific arguments:
+               skip_gc_internal::Bool = true,
                frame_for_type::Bool = true,
             )
+    PProf.log_greeting(skip_jl_dispatch)
     period = UInt64(0x1)
 
     @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"
@@ -63,6 +70,7 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     # specializations to PProf Functions. We use a hash of the function for the key.
     funcs_map  = Dict{UInt64, UInt64}()
     functions = Vector{Function}()
+    funcs_to_skip = Set{Any}()
 
     # NOTE: It's a bug to use the actual StackFrame itself as a key in a dictionary, since
     # different StackFrames can compare the same sometimes! 🙀 So we manually compute an ID
@@ -80,22 +88,25 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     drop_frames = isnothing(drop_frames) ? 0 : enter!(drop_frames)
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
 
-    function maybe_add_location(frame::StackFrame)::UInt64
+    function maybe_add_location(frame::StackFrame)::Tuple{Bool,UInt64}
+        # Use a unique function id for the frame:
         # See: https://github.com/JuliaPerf/PProf.jl/issues/69
         function_key = method_instance_id(frame)
         line_number = frame.line
+
+        function_key in funcs_to_skip && return false, 0
+
         # For allocations profile, we uniquely identify each frame position by
         # (function,line_number) pairs. That identifies a position in the code.
         frame_key = (function_key, line_number)
-        return get!(locs_map, frame_key) do
+
+        success = Ref(true)
+        loc = get!(locs_map, frame_key) do
             loc_id = UInt64(length(locations) + 1)
 
             # Extract info from the location frame
             (function_name, file_name) =
                 string(frame.func), string(frame.file)
-
-            # Use a unique function id for the frame:
-            function_key = method_instance_id(frame)
 
             # Decode the IP into information about this stack frame
             function_id = get!(funcs_map, function_key) do
@@ -121,6 +132,14 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                 end
                 isempty(simple_name) && (simple_name = "[unknown function]")
                 isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
+
+                if !PProf.should_keep_frame(from_c, skip_jl_dispatch,
+                        skip_gc_internal, frame, simple_name)
+                    success[] = false
+                    push!(funcs_to_skip, function_key)
+                    return 0
+                end
+
                 # WEIRD TRICK: By entering a separate copy of the string (with a
                 # different string id) for the name and system_name, pprof will use
                 # the supplied `name` *verbatim*, without pruning off the arguments.
@@ -131,12 +150,17 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
                 else
                     name = enter!(simple_name)
                 end
+
                 file = Base.find_source_file(file_name)
                 file = file !== nothing ? file : file_name
                 filename   = enter!(file)
                 push!(functions, Function(func_id, name, system_name, filename, start_line))
 
                 return func_id
+            end
+
+            if !success[]
+                return 0
             end
 
             push!(
@@ -146,6 +170,8 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
 
             return loc_id
         end
+
+        return success[], loc
     end
 
     type_name_cache = Dict{Any,String}()
@@ -158,17 +184,21 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
 
     function construct_location_for_type(typename)
         # TODO: Lol something less hacky than this:
-        return maybe_add_location(StackFrame(get_type_name(typename), "nothing", 0))
+        _, loc = maybe_add_location(StackFrame(get_type_name(typename), "nothing", 0))
+        return loc
     end
 
     # convert the sample.stack to vector of location_ids
     @showprogress "Analyzing $(length(alloc_profile.allocs)) allocation samples..." for sample in alloc_profile.allocs
         # for each location in the sample.stack, if it's the first time seeing it,
         # we also enter that location into the locations table
-        location_ids = UInt64[
-            maybe_add_location(frame)
-            for frame in sample.stacktrace if (!frame.from_c || from_c)
-        ]
+        location_ids = sizehint!(UInt64[], length(sample.stacktrace))
+        for frame in sample.stacktrace
+            should_add, loc = maybe_add_location(frame)
+            if should_add
+                push!(location_ids, loc)
+            end
+        end
 
         if frame_for_type
             # Add location_id for the type:
