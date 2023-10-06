@@ -26,10 +26,13 @@ end
 @testset "export basic profile" begin
     Profile.clear()
 
-    @profile for i in 1:10000
-        # Profile compilation
-        @eval foo(x,y) = x * y + x / y
-        @eval foo($i,3)
+    while Profile.len_data() == 0
+        @profile for i in 1:10000
+            # Profile compilation
+            foo_sym = Symbol("foo$i)")
+            @eval $foo_sym(x,y) = x * y + x / y
+            @eval $foo_sym($i,3)
+        end
     end
 
     # Cache profile output to test that it isn't changed
@@ -60,7 +63,9 @@ end
     Profile.clear()
 
     let arr = []
-        @profile foo(1000000, 5, arr)
+        while Profile.len_data() == 0
+            @profile foo(1000000, 5, arr)
+        end
         sleep(2)
     end
     for i in 1:2
@@ -87,7 +92,9 @@ end
 
 @testset "full_signatures" begin
     Profile.clear()
-    @profile foo(1000000, 5, [])
+    while Profile.len_data() == 0
+        @profile foo(1000000, 5, [])
+    end
     @test "foo" in load_prof_proto(pprof(out=tempname(), web=false, full_signatures = false)).string_table
     @test any(occursin.(Regex("^foo\\(::$Int, ::$Int, ::(Vector|Array)"),
                 load_prof_proto(pprof(out=tempname(), web=false, full_signatures = true)).string_table))
