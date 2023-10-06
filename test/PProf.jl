@@ -59,7 +59,7 @@ end
 
 function load_prof_proto(file)
     @show file
-    open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), file, "r")
+    open(io->decode(ProtoDecoder(GzipDecompressorStream(io)), PProf.perftools.profiles.Profile), file, "r")
 end
 
 @testset "with_c" begin
