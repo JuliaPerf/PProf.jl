@@ -49,7 +49,7 @@ end
     outf = PProf.Allocs.pprof(out=out, web=false)
 
     # Read the exported profile
-    prof = open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), outf, "r")
+    prof = open(io->decode(ProtoDecoder(GzipDecompressorStream(io)), PProf.perftools.profiles.Profile), outf, "r")
 
     # Test for both functions:
     @test in("foo(::Float64)", prof.string_table)
