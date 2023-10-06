@@ -17,6 +17,7 @@ using Base.StackTraces: StackFrame
 
 using PProf.ProtoBuf
 using PProf.OrderedCollections
+using CodecZlib
 
 using ProgressMeter
 
@@ -206,8 +207,11 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     )
 
     # Write to disk
-    open(out, "w") do io
+    io = GzipCompressorStream(open(out, "w"))
+    try
         ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+    finally
+        close(io)
     end
 
     if web

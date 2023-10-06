@@ -199,8 +199,11 @@ function pprof(fg::Node{NodeData},
     )
 
     # Write to disk
-    open(out, "w") do io
+    io = GzipCompressorStream(open(out, "w"))
+    try
         ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+    finally
+        close(io)
     end
 
     if web

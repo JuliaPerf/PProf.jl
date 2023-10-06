@@ -5,6 +5,7 @@ using PProf
 using Test
 using Profile
 using ProtoBuf
+using CodecZlib
 
 # Test interactions with FlameGraphs package
 using FlameGraphs
@@ -43,7 +44,12 @@ end
     outf = pprof(fg, out=out, web=false)
 
     # Read the exported profile
-    fg_prof = open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), outf, "r")
+    io = GzipDecompressorStream(open(outf, "r"))
+    fg_prof = try
+        decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
+    finally
+        close(io)
+    end
 
     # Verify that we exported stack trace samples:
     @test length(fg_prof.sample) > 0
@@ -55,7 +61,12 @@ end
 
 function load_prof_proto(file)
     @show file
-    open(io->decode(ProtoDecoder(io), PProf.perftools.profiles.Profile), file, "r")
+    io = GzipDecompressorStream(open(file, "r"))
+    fg_prof = try
+        decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
+    finally
+        close(io)
+    end
 end
 
 @testset "with_c" begin

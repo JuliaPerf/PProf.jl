@@ -1,10 +1,11 @@
 name = "PProf"
 uuid = "e4faabce-9ead-11e9-39d9-4379958e3056"
 authors = ["Valentin Churavy <v.churavy@gmail.com>", "Nathan Daly <nhdaly@gmail.com>"]
-version = "2.3.0"
+version = "3.0.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
 EnumX = "4e289a0a-7415-4d19-859d-a7e5c4648b56"
 FlameGraphs = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -23,6 +24,7 @@ ProgressMeter = "1.7"
 ProtoBuf = "1"
 julia = "1.6"
 pprof_jll = "0.1, 1"
+CodecZlib = "0.7"
 
 [extras]
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
