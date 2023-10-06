@@ -34,13 +34,7 @@ NOTE: We must use Int64 throughout this package (regardless of system word-size)
 proto file specifies 64-bit integers.
 """
 function _enter!(dict::OrderedDict{T, Int64}, key::T) where T
-    if haskey(dict, key)
-        return dict[key]
-    else
-        l = Int64(length(dict))
-        dict[key] = l
-        return l
-    end
+    return get!(dict, key, Int64(length(dict)))
 end
 
 using Base.StackTraces: StackFrame
