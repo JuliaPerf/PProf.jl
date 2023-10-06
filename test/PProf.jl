@@ -8,7 +8,7 @@ using ProtoBuf
 
 const out = tempname() * ".pb.gz"
 
-function foo(n, a, out=[])
+@noinline function foo(n, a, out=[])
     # make this expensive to ensure it's sampled
     for i in 1:n
         push!(out, i*a)
@@ -93,11 +93,19 @@ end
 @testset "full_signatures" begin
     Profile.clear()
     while Profile.len_data() == 0
-        @profile foo(1000000, 5, [])
+        # Use @eval and @time to make sure we don't interpret foo, and thus break the full-signature test
+        @profile @eval @time foo(1000000, 5, [])
     end
     @test "foo" in load_prof_proto(pprof(out=tempname(), web=false, full_signatures = false)).string_table
-    @test any(occursin.(Regex("^foo\\(::$Int, ::$Int, ::(Vector|Array)"),
-                load_prof_proto(pprof(out=tempname(), web=false, full_signatures = true)).string_table))
+
+    string_data = load_prof_proto(pprof(out=tempname(), web=false, full_signatures = true)).string_table
+    found_full_sig = any(occursin.(Regex("^foo\\(::$Int, ::$Int, ::(Vector|Array)"), string_data))
+    @test found_full_sig
+    # Log what we got instead
+    if !found_full_sig
+        println("expected foo(...), but got:")
+        @show string_data
+    end
 end
 
 @testset "drop_frames/keep_frames" begin
