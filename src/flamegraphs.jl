@@ -85,6 +85,7 @@ function pprof(fg::Node{NodeData},
 
     sample_type = [
         ValueType!("events", "count"), # Mandatory
+        ValueType!("cpu", "nanoseconds"),
     ]
 
     period_type = ValueType!("cpu", "nanoseconds")
@@ -176,7 +177,8 @@ function pprof(fg::Node{NodeData},
         end
 
         value = [
-            length(span), # Number of samples in this frame.
+            1, # Number of samples in this frame.
+            60000000, # CPU ns (TODO: real number)
         ]
         push!(samples, Sample(;location_id, value))
 

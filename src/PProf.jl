@@ -135,8 +135,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     samples = Vector{Sample}()
 
     sample_type = [
-        ValueType!("events",      "count"), # Mandatory
-        ValueType!("stack_depth", "count")
+        ValueType!("events", "count"), # Mandatory
+        ValueType!("cpu", "nanoseconds")
     ]
 
     period_type = ValueType!("cpu", "nanoseconds")
@@ -145,7 +145,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
     lastwaszero = true
-
+    
     for ip in data
         # ip == 0x0 is the sentinel value for finishing a backtrace, therefore finising a sample
         if ip == 0
@@ -158,7 +158,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             # End of sample
             value = [
                 1,                   # events
-                length(location_id), # stack_depth
+                sampling_delay       # CPU ns
             ]
             push!(samples, Sample(;location_id, value))
             location_id = Vector{eltype(data)}()
@@ -195,7 +195,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
             # Use a unique function id for the frame:
             func_id = method_instance_id(frame)
-            push!(location.line, Line(function_id = func_id, line = frame.line))
+            line_struct = Line(function_id = func_id, line = frame.line > 0 ? frame.line : 1)
+            push!(location.line, line_struct)
 
             # Known function
             func_id in seen_funcs && continue
@@ -211,7 +212,9 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 file = string(meth.file)
                 io = IOBuffer()
                 Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
-                full_name_with_args = _escape_name_for_pprof(String(take!(io)))
+                call_str = String(take!(io))
+                # add module name as well
+                full_name_with_args = _escape_name_for_pprof("$(meth.module).$call_str")
                 start_line = convert(Int64, meth.line)
             else
                 # frame.linfo either nothing or CodeInfo, either way fallback
