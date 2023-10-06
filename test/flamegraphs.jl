@@ -30,9 +30,10 @@ end
 @testset "export basic profile" begin
     Profile.clear()
 
-    fib(x) = fib(x-1) + fib(x-2)
     while Profile.len_data() == 0
-        @profile for _ in 1:10000; fib(5); end
+        let x = 5
+            @profile @time for _ in 1:10000; x += 1; end
+        end
     end
 
     # Collect the profile via FlameGraphs
