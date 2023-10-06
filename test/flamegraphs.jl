@@ -31,9 +31,10 @@ end
 @testset "export basic profile" begin
     Profile.clear()
 
-    let x = 1
-        @profile for _ in 1:1000000; x += 1; end
-        sleep(2)
+    while Profile.len_data() == 0
+        let x = 5
+            @profile @time for _ in 1:10000; x += 1; end
+        end
     end
 
     # Collect the profile via FlameGraphs
@@ -72,7 +73,9 @@ end
     Profile.clear()
 
     let arr = []
-        @profile foo(1000000, 5, arr)
+        while Profile.len_data() == 0
+            @profile foo(1000000, 5, arr)
+        end
         sleep(2)
     end
 
