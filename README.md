@@ -1,7 +1,5 @@
 # PProf.jl
-
-[![Build Status](https://travis-ci.com/vchuravy/PProf.jl.svg?branch=master)](https://travis-ci.com/vchuravy/PProf.jl)
-
+[![CI][ci-img]][ci-url]
 
 *Sometimes I need a hammer, sometimes I need a drill, this is a hammer-drill*
 
@@ -9,7 +7,8 @@
 using Profile
 using PProf
 
-# collect a profile
+# Collect a profile
+Profile.clear()
 @profile peakflops()
 
 # Export pprof profile and open interactive profiling web interface.
@@ -17,6 +16,16 @@ pprof()
 ```
 
 This prints a link to a local webserver where you can inspect the profile you've collected. It produces a file called `profile.pb.gz` in the [`pprof`](https://github.com/google/pprof) format, and then opens the `pprof` tool in interactive "web" mode.
+
+To profile allocations instead of CPU time, simply use the equivalent functions from the `Allocs` submodule instead:
+```julia
+# Collect an allocation profile
+Profile.Allocs.clear()
+Profile.Allocs.@profile peakflops()
+
+# Export pprof allocation profile and open interactive profiling web interface.
+PProf.Allocs.pprof()
+```
 
 For more usage examples see the pprof docs: https://github.com/google/pprof/blob/master/doc/README.md
 
@@ -64,3 +73,6 @@ Serving web UI on http://localhost:57599
 <img width=500px src="docs/graph.png" alt="graph"/>
 
 <img width=500px src="docs/flamegraph.png" alt="flamegraph"/>
+
+[ci-img]: https://github.com/JuliaPerf/PProf.jl/actions/workflows/CI.yml/badge.svg?branch=master
+[ci-url]: https://github.com/JuliaPerf/PProf.jl/actions/workflows/CI.yml

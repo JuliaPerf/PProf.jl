@@ -5,6 +5,7 @@ using PProf
 using Test
 using Profile
 using ProtoBuf
+using CodecZlib
 
 # Test interactions with FlameGraphs package
 using FlameGraphs
@@ -30,9 +31,10 @@ end
 @testset "export basic profile" begin
     Profile.clear()
 
-    let x = 1
-        @profile for _ in 1:10000; x += 1; end
-        sleep(2)
+    while Profile.len_data() == 0
+        let x = 5
+            @profile @time for _ in 1:10000; x += 1; end
+        end
     end
 
     # Collect the profile via FlameGraphs
@@ -42,26 +44,38 @@ end
     outf = pprof(fg, out=out, web=false)
 
     # Read the exported profile
-    fg_prof = open(io->readproto(io, PProf.perftools.profiles.Profile()), outf, "r")
+    io = GzipDecompressorStream(open(outf, "r"))
+    fg_prof = try
+        decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
+    finally
+        close(io)
+    end
 
     # Verify that we exported stack trace samples:
     @test length(fg_prof.sample) > 0
     # Verify that we exported frame information
     @test length(fg_prof.location) > 0
-    @test length(fg_prof._function) > 0
+    @test length(fg_prof.var"#function") > 0
 
 end
 
 function load_prof_proto(file)
     @show file
-    open(io->readproto(io, PProf.perftools.profiles.Profile()), file, "r")
+    io = GzipDecompressorStream(open(file, "r"))
+    fg_prof = try
+        decode(ProtoDecoder(io), PProf.perftools.profiles.Profile)
+    finally
+        close(io)
+    end
 end
 
 @testset "with_c" begin
     Profile.clear()
 
     let arr = []
-        @profile foo(1000000, 5, arr)
+        while Profile.len_data() == 0
+            @profile foo(1000000, 5, arr)
+        end
         sleep(2)
     end
 
@@ -76,7 +90,7 @@ end
     # Test that C frames were excluded
     @test length(with_c.sample) == length(without_c.sample)
     @test length(with_c.location) > length(without_c.location)
-    @test length(with_c._function) > length(without_c._function)
+    @test length(with_c.var"#function") > length(without_c.var"#function")
 end
 
 @testset "drop_frames/keep_frames" begin

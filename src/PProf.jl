@@ -5,6 +5,7 @@ export pprof, @pprof
 using Profile
 using ProtoBuf
 using OrderedCollections
+using CodecZlib
 import pprof_jll
 
 using Profile: clear
@@ -16,7 +17,7 @@ Alias for `Profile.clear()`
 """
 clear
 
-include(joinpath("..", "lib", "perftools.jl"))
+include(joinpath("..", "lib", "perftools", "perftools.jl"))
 
 import .perftools.profiles: ValueType, Sample, Function,
                             Location, Line, Label
@@ -34,13 +35,7 @@ NOTE: We must use Int64 throughout this package (regardless of system word-size)
 proto file specifies 64-bit integers.
 """
 function _enter!(dict::OrderedDict{T, Int64}, key::T) where T
-    if haskey(dict, key)
-        return dict[key]
-    else
-        l = Int64(length(dict))
-        dict[key] = l
-        return l
-    end
+    return get!(dict, key, Int64(length(dict)))
 end
 
 using Base.StackTraces: StackFrame
@@ -103,7 +98,13 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                ui_relative_percentages::Bool = true,
             )
     if data === nothing
-        data = copy(Profile.fetch(include_meta=true))
+        data = if isdefined(Profile, :has_meta)
+            copy(Profile.fetch(include_meta = true))
+        else
+            copy(Profile.fetch())
+        end
+    elseif isdefined(Profile, :has_meta)
+        @assert Profile.has_meta(data) "PProf expects `Profile.fetch(include_meta=true)`."
     end
     lookup = lidict
     if lookup === nothing
@@ -121,7 +122,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     string_table = OrderedDict{AbstractString, Int64}()
     enter!(string) = _enter!(string_table, string)
     enter!(::Nothing) = _enter!(string_table, "nothing")
-    ValueType!(_type, unit) = ValueType(_type = enter!(_type), unit = enter!(unit))
+    ValueType!(_type, unit) = ValueType(enter!(_type), enter!(unit))
     Label!(key, value, unit) = Label(key = enter!(key), num = value, num_unit = enter!(unit))
     Label!(key, value) = Label(key = enter!(key), str = enter!(string(value)))
 
@@ -134,25 +135,15 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     seen_locs = Set{UInt64}()
     locs  = Dict{UInt64, Location}()
     locs_from_c  = Dict{UInt64, Bool}()
+    samples = Vector{Sample}()
 
     sample_type = [
         ValueType!("events",      "count"), # Mandatory
     ]
 
-    prof = PProfile(
-        sample = [], location = [], _function = [],
-        mapping = [], string_table = [],
-        sample_type = sample_type, default_sample_type = 1, # events
-        period = sampling_delay, period_type = ValueType!("cpu", "nanoseconds")
-    )
-
-    if drop_frames !== nothing
-        prof.drop_frames = enter!(drop_frames)
-    end
-    if keep_frames !== nothing
-        prof.keep_frames = enter!(keep_frames)
-    end
-
+    period_type = ValueType!("cpu", "nanoseconds")
+    drop_frames = isnothing(drop_frames) ? 0 : enter!(drop_frames)
+    keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
 
@@ -164,7 +155,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             if value !== nothing
                 @assert meta !== nothing
                 # Finish last block
-                push!(prof.sample, Sample(;location_id = reverse!(location_id), value = value, label = meta))
+                push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
                 location_id = Vector{eltype(data)}()
             end
 
@@ -204,7 +195,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         push!(seen_locs, ip)
 
         # Decode the IP into information about this stack frame (or frames given inlining)
-        location = Location(;id = ip, address = ip, line=[])
+        location = Location(;id = ip, address = ip)
         location_from_c = true
         # Will have multiple frames if frames were inlined (the last frame is the "real
         # function", the inlinee)
@@ -215,15 +206,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             # if any of the frames is not from_c the entire location is not from_c
             location_from_c &= frame.from_c
 
-            # `func_id` - Uniquely identifies this function (a method instance in julia, and
-            # a function in C/C++).
-            # Note that this should be unique even for several different functions all
-            # inlined into the same frame.
-            func_id = if frame.linfo !== nothing
-                hash(frame.linfo)
-            else
-                hash((frame.func, frame.file, frame.line))
-            end
+            # Use a unique function id for the frame:
+            func_id = method_instance_id(frame)
             push!(location.line, Line(function_id = func_id, line = frame.line))
 
             # Known function
@@ -231,8 +215,6 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             push!(seen_funcs, func_id)
 
             # Store the function in our functions dict
-            funcProto = Function()
-            funcProto.id = func_id
             file = nothing
             simple_name = _escape_name_for_pprof(frame.func)
             local full_name_with_args
@@ -242,30 +224,31 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 file = string(meth.file)
                 io = IOBuffer()
                 Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
-                name = String(take!(io))
-                full_name_with_args = _escape_name_for_pprof(name)
-                funcProto.start_line = convert(Int64, meth.line)
+                full_name_with_args = _escape_name_for_pprof(String(take!(io)))
+                start_line = convert(Int64, meth.line)
             else
                 # frame.linfo either nothing or CodeInfo, either way fallback
                 file = string(frame.file)
                 full_name_with_args = _escape_name_for_pprof(string(frame.func))
-                funcProto.start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+                start_line = convert(Int64, frame.line) # TODO: Get start_line properly
             end
+            isempty(simple_name) && (simple_name = "[unknown function]")
+            isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
             # WEIRD TRICK: By entering a separate copy of the string (with a
             # different string id) for the name and system_name, pprof will use
             # the supplied `name` *verbatim*, without pruning off the arguments.
             # So even when full_signatures == false, we want to generate two `enter!` ids.
-            funcProto.system_name = enter!(simple_name)
+            system_name = enter!(simple_name)
             if full_signatures
-                funcProto.name = enter!(full_name_with_args)
+                name = enter!(full_name_with_args)
             else
-                funcProto.name = enter!(simple_name)
+                name = enter!(simple_name)
             end
             file = Base.find_source_file(file)
-            funcProto.filename   = enter!(file)
+            filename = enter!(file)
             # Only keep C functions if from_c=true
             if (from_c || !frame.from_c)
-                funcs[func_id] = funcProto
+                funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
             end
         end
         locs_from_c[ip] = location_from_c
@@ -276,15 +259,26 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         end
     end
 
-    # Build Profile
-    prof.string_table = collect(keys(string_table))
     # If from_c=false funcs and locs should NOT contain C functions
-    prof._function = collect(values(funcs))
-    prof.location  = collect(values(locs))
+    prof = PProfile(
+        sample_type = sample_type,
+        sample = samples,
+        location =  collect(values(locs)),
+        var"#function" = collect(values(funcs)),
+        string_table = collect(keys(string_table)),
+        drop_frames = drop_frames,
+        keep_frames = keep_frames,
+        period_type = period_type,
+        period = sampling_delay,
+        default_sample_type = 1, # events
+    )
 
     # Write to disk
-    open(out, "w") do io
-        writeproto(io, prof)
+    io = GzipCompressorStream(open(out, "w"))
+    try
+        ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+    finally
+        close(io)
     end
 
     if web
@@ -301,6 +295,17 @@ function _escape_name_for_pprof(name)
     quoted = repr(string(name))
     quoted = quoted[2:thisind(quoted, end-1)]
     return quoted
+end
+function method_instance_id(frame)
+    # `func_id` - Uniquely identifies this function (a method instance in julia, and
+    # a function in C/C++).
+    # Note that this should be unique even for several different functions all
+    # inlined into the same frame.
+    func_id = if frame.linfo !== nothing
+        hash(frame.linfo)
+    else
+        hash((frame.func, frame.file, frame.line, frame.inlined))
+    end
 end
 
 """
@@ -337,7 +342,7 @@ function refresh(; webhost::AbstractString = "localhost",
 end
 
 """
-    pprof_kill()
+    PProf.kill()
 
 Kills the pprof server if running.
 """
@@ -364,4 +369,16 @@ end
 
 include("flamegraphs.jl")
 
+if isdefined(Profile, :Allocs)  # PR https://github.com/JuliaLang/julia/pull/42768
+    include("Allocs.jl")
+end
+
+
+# Precompile as much as possible, so that profiling doesn't end up measuring our own
+# compilation.
+function __init__()
+    precompile(pprof, ()) || error("precompilation of package functions is not supposed to fail")
+    precompile(kill, ()) || error("precompilation of package functions is not supposed to fail")
+    precompile(refresh, ()) || error("precompilation of package functions is not supposed to fail")
+end
 end # module
