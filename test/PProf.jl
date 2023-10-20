@@ -74,16 +74,20 @@ end
         end
         sleep(2)
     end
-    for i in 1:3
+    @testset for i in 1:4
         if i == 1
             data = Profile.fetch(include_meta = true)
             args = (data,)
         elseif i == 2
+            data,lidict = Profile.retrieve(include_meta = true)
+            args = (data, lidict)
+        elseif i == 3
             # Ensure we are backwards compatible with older, non-meta profiles
             data = Profile.fetch(include_meta = false)
             args = (data,)
         else
-            data,lidict = Profile.retrieve(include_meta = true)
+            # Ensure we are backwards compatible with older, non-meta profiles
+            data,lidict = Profile.retrieve(include_meta = false)
             args = (data, lidict)
         end
 

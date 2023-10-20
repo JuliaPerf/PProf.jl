@@ -100,8 +100,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     has_meta = false
     if data === nothing
         data = if isdefined(Profile, :has_meta)
-            copy(Profile.fetch(include_meta = true))
             has_meta = true
+            copy(Profile.fetch(include_meta = true))
         else
             copy(Profile.fetch())
         end
@@ -149,10 +149,12 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
 
-    # All samples get the same value for the CPU profile.
+    # All samples get the same value for CPU profiles.
     value = [
         1,      # events
     ]
+
+    lastwaszero = false  # (Legacy: used when has_meta = false)
 
     idx = length(data)
     meta = nothing
@@ -179,18 +181,24 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             ]
             idx -= (Profile.nmeta + 2)  # skip all the metas, plus the 2 nulls that end a block.
             continue
-        elseif !has_meta && data[idx] == 0
+        elseif !has_meta && idx != length(data) && data[idx] == 0
+            # Avoid creating empty samples
             # ip == 0x0 is the sentinel value for finishing a backtrace (when meta is disabled), therefore finising a sample
             # On some platforms, we sometimes get two 0s in a row for some reason...
-            if idx > 1 && data[idx-1] == 0
-                idx -= 1
+            if lastwaszero
+                @assert length(location_id) == 0
+            else
+                # Finish last block
+                push!(samples, Sample(;location_id = reverse!(location_id), value = value))
+                location_id = Vector{eltype(data)}()
+                lastwaszero = true
             end
-            # Finish last block
-            push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
-            location_id = Vector{eltype(data)}()
+            idx -= 1
+            continue
         end
         ip = data[idx]
         idx -= 1
+        lastwaszero = false
 
         # A backtrace consists of a set of IP (Instruction Pointers), each IP points
         # a single line of code and `litrace` has the necessary information to decode
