@@ -110,18 +110,32 @@ end
     end
     @testset for i in 1:4
         if i == 1
+            if !Profile.has_meta
+                continue
+            end
             data = Profile.fetch(include_meta = true)
             args = (data,)
         elseif i == 2
+            if !Profile.has_meta
+                continue
+            end
             data,lidict = Profile.retrieve(include_meta = true)
             args = (data, lidict)
         elseif i == 3
             # Ensure we are backwards compatible with older, non-meta profiles
-            data = Profile.fetch(include_meta = false)
+            if Profile.has_meta
+                data = Profile.fetch(include_meta = false)
+            else
+                data = Profile.fetch()
+            end
             args = (data,)
         else
             # Ensure we are backwards compatible with older, non-meta profiles
-            data,lidict = Profile.retrieve(include_meta = false)
+            if Profile.has_meta
+                data,lidict = Profile.retrieve(include_meta = false)
+            else
+                data,lidict = Profile.retrieve()
+            end
             args = (data, lidict)
         end
 
