@@ -94,6 +94,9 @@ end
         @test length(with_c.location) > length(without_c.location)
         @test length(with_c.var"#function") > length(without_c.var"#function")
     end
+
+    # Must have meta.
+    @test_throws AssertionError pprof(Profile.fetch(include_meta = false))
 end
 
 @testset "full_signatures" begin
