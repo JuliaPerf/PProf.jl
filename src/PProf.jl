@@ -48,6 +48,7 @@ using Base.StackTraces: StackFrame
             web = true, webhost = "localhost", webport = 57599,
             out = "profile.pb.gz", from_c = true, full_signatures = true, drop_frames = "",
             keep_frames = "", ui_relative_percentages = true, sampling_delay = nothing,
+            tagroot = "taskid,threadid"
          )
     pprof(FlameGraphs.flamegraph(); kwargs...)
 
@@ -78,6 +79,14 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `from_c::Bool`: If `false`, exclude frames that come from from_c. Defaults to `true`.
 - `full_signatures::Bool`: If `true`, methods are printed as signatures with full argument
                            types. If `false`, as only names. E.g. `eval(::Module, ::Any)` vs `eval`.
+- `tagroot`: Set which metadata tags you want to turn into root frames for the profile. This
+             is used to view the metadata tags in the Flamegraph view. This should be a
+             comma-separated string, chosing from the following metadata options:
+             - `taskid`
+             - `threadid`
+             - `thread_sleeping`
+             - `cycle_clock`
+             Defaults to `"taskid,threadid"`, grouping by taskid then threadid.
 - `drop_frames`: frames with function_name fully matching regexp string will be dropped from the samples,
                  along with their successors.
 - `keep_frames`: frames with function_name fully matching regexp string will be kept, even if it matches drop_functions.
@@ -96,6 +105,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                drop_frames::Union{Nothing, AbstractString} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
+               tagroot::Union{Nothing, AbstractString} = "taskid,threadid",
             )
     has_meta = false
     if data === nothing
@@ -319,8 +329,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     end
 
     if web
-        refresh(webhost = webhost, webport = webport, file = out,
-            ui_relative_percentages = ui_relative_percentages)
+        refresh(; webhost, webport, file = out, ui_relative_percentages, tagroot)
     end
 
     out
@@ -361,6 +370,7 @@ function refresh(; webhost::AbstractString = "localhost",
                    webport::Integer = 57599,
                    file::AbstractString = "profile.pb.gz",
                    ui_relative_percentages::Bool = true,
+                   tagroot::Union{AbstractString,Nothing} = "taskid,threadid",
                 )
 
     if proc[] === nothing
@@ -374,7 +384,11 @@ function refresh(; webhost::AbstractString = "localhost",
     relative_percentages_flag = ui_relative_percentages ? "-relative_percentages" : ""
 
     proc[] = pprof_jll.pprof() do pprof_path
-        open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
+        if tagroot !== nothing && !isempty(tagroot)
+            open(pipeline(`$pprof_path -tagroot $tagroot -http=$webhost:$webport $relative_percentages_flag $file`))
+        else
+            open(pipeline(`$pprof_path -http=$webhost:$webport $relative_percentages_flag $file`))
+        end
     end
 end
 
