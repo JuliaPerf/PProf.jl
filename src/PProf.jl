@@ -160,10 +160,10 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             end
 
             # read metadata
-            thread_sleeping = data[idx - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            cpu_cycle_clock = data[idx - 3]
-            taskid = data[idx - 4]
-            threadid = data[idx - 5]
+            thread_sleeping = data[idx - Profile.META_OFFSET_SLEEPSTATE] - 1  # "Sleeping" is recorded as 1 or 2, to avoid 0s, which indicate end-of-block.
+            cpu_cycle_clock = data[idx - Profile.META_OFFSET_CPUCYCLECLOCK]
+            taskid = data[idx - Profile.META_OFFSET_TASKID]
+            threadid = data[idx - Profile.META_OFFSET_THREADID]
 
             value = [
                 1,                   # events
@@ -174,7 +174,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 Label!("taskid", taskid),
                 Label!("threadid", threadid),
             ]
-            idx -= (Profile.nmeta + 1)
+            idx -= (Profile.nmeta + 2)  # skip all the metas, plus the 2 nulls that end a block.
             continue
         end
         ip = data[idx]
