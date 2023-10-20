@@ -65,6 +65,40 @@ function load_prof_proto(file)
     open(io->decode(ProtoDecoder(GzipDecompressorStream(io)), PProf.perftools.profiles.Profile), file, "r")
 end
 
+@testset "Corner Cases" begin
+    @testset "non-meta profile" begin
+
+        @testset "0 sample profile" begin
+            prof = load_prof_proto(pprof(UInt64[], out=tempname(), web=false))
+            @test length(prof.sample) == 0
+        end
+        @testset "1 sample profile" begin
+            prof = load_prof_proto(pprof(UInt64[0xdeadbeef,0], out=tempname(), web=false))
+            @test length(prof.sample) == 1
+        end
+
+        @testset "2 sample, 1 location profile" begin
+            prof = load_prof_proto(pprof(UInt64[0xdeadbeef,0, 0xdeadbeef, 0], out=tempname(), web=false))
+            @test length(prof.sample) == 2
+            @test length(prof.location) == 1
+        end
+    end
+    @testset "with-meta profile" begin
+        @testset "1 sample profile" begin
+            data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0]
+            prof = load_prof_proto(pprof(data, out=tempname(), web=false))
+            @test length(prof.sample) == 1
+        end
+
+        @testset "2 sample 1 location profile" begin
+            data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0, 0xdeadbeef, 1, 1, 1, 1, 0, 0]
+            prof = load_prof_proto(pprof(data, out=tempname(), web=false))
+            @test length(prof.sample) == 2
+            @test length(prof.location) == 1
+        end
+    end
+end
+
 @testset "with_c" begin
     Profile.clear()
 
