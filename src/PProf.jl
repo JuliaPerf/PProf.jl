@@ -97,16 +97,14 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
             )
-    has_meta = false
     if data === nothing
         data = if isdefined(Profile, :has_meta)
             copy(Profile.fetch(include_meta = true))
-            has_meta = true
         else
             copy(Profile.fetch())
         end
     elseif isdefined(Profile, :has_meta)
-        has_meta = Profile.has_meta(data)
+        @assert Profile.has_meta(data) "PProf expects `Profile.fetch(include_meta=true)`."
     end
     lookup = lidict
     if lookup === nothing
@@ -149,28 +147,27 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
 
-    # All samples get the same value for the CPU profile.
-    value = [
-        1,      # events
-    ]
-
     idx = length(data)
+    value = nothing
     meta = nothing
     while idx > 0
-        if has_meta && Profile.is_block_end(data, idx)
-            if meta !== nothing
+        if Profile.is_block_end(data, idx)
+            if value !== nothing
+                @assert meta !== nothing
                 # Finish last block
                 push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
                 location_id = Vector{eltype(data)}()
             end
 
-            # Consume all of the metadata entries in the buffer, and then position the IP
-            # at the idx for the actual ip.
+            # read metadata
             thread_sleeping = data[idx - Profile.META_OFFSET_SLEEPSTATE] - 1  # "Sleeping" is recorded as 1 or 2, to avoid 0s, which indicate end-of-block.
             cpu_cycle_clock = data[idx - Profile.META_OFFSET_CPUCYCLECLOCK]
             taskid = data[idx - Profile.META_OFFSET_TASKID]
             threadid = data[idx - Profile.META_OFFSET_THREADID]
 
+            value = [
+                1,                   # events
+            ]
             meta = Label[
                 Label!("thread_sleeping", thread_sleeping != 0),
                 Label!("cycle_clock", cpu_cycle_clock, "nanoseconds"),
@@ -179,15 +176,6 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             ]
             idx -= (Profile.nmeta + 2)  # skip all the metas, plus the 2 nulls that end a block.
             continue
-        elseif !has_meta && data[idx] == 0
-            # ip == 0x0 is the sentinel value for finishing a backtrace (when meta is disabled), therefore finising a sample
-            # On some platforms, we sometimes get two 0s in a row for some reason...
-            if idx > 1 && data[idx-1] == 0
-                idx -= 1
-            end
-            # Finish last block
-            push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
-            location_id = Vector{eltype(data)}()
         end
         ip = data[idx]
         idx -= 1

@@ -74,13 +74,9 @@ end
         end
         sleep(2)
     end
-    for i in 1:3
+    for i in 1:2
         if i == 1
             data = Profile.fetch(include_meta = true)
-            args = (data,)
-        elseif i == 2
-            # Ensure we are backwards compatible with older, non-meta profiles
-            data = Profile.fetch(include_meta = false)
             args = (data,)
         else
             data,lidict = Profile.retrieve(include_meta = true)
@@ -98,6 +94,9 @@ end
         @test length(with_c.location) > length(without_c.location)
         @test length(with_c.var"#function") > length(without_c.var"#function")
     end
+
+    # Must have meta.
+    @test_throws AssertionError pprof(Profile.fetch(include_meta = false))
 end
 
 @testset "full_signatures" begin
