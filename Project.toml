@@ -17,6 +17,7 @@ pprof_jll = "cf2c5f97-e748-59fa-a03f-dda3c62118cb"
 
 [compat]
 AbstractTrees = "0.3, 0.4"
+CodecZlib = "0.7"
 EnumX = "1"
 FlameGraphs = "0.2, 1"
 OrderedCollections = "1.1"
@@ -24,11 +25,10 @@ ProgressMeter = "1.7"
 ProtoBuf = "1"
 julia = "1.6"
 pprof_jll = "0.1, 1"
-CodecZlib = "0.7"
 
 [extras]
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]

@@ -65,6 +65,7 @@ function load_prof_proto(file)
     open(io->decode(ProtoDecoder(GzipDecompressorStream(io)), PProf.perftools.profiles.Profile), file, "r")
 end
 
+const HAS_META = isdefined(Profile, :has_meta)
 @testset "Corner Cases" begin
     @testset "non-meta profile" begin
 
@@ -83,24 +84,25 @@ end
             @test length(prof.location) == 1
         end
     end
-    @testset "with-meta profile" begin
-        @testset "1 sample profile" begin
-            data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0]
-            prof = load_prof_proto(pprof(data, out=tempname(), web=false))
-            @test length(prof.sample) == 1
-        end
+    if HAS_META
+        @testset "with-meta profile" begin
+            @testset "1 sample profile" begin
+                data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0]
+                prof = load_prof_proto(pprof(data, out=tempname(), web=false))
+                @test length(prof.sample) == 1
+            end
 
-        @testset "2 sample 1 location profile" begin
-            data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0, 0xdeadbeef, 1, 1, 1, 1, 0, 0]
-            prof = load_prof_proto(pprof(data, out=tempname(), web=false))
-            @test length(prof.sample) == 2
-            @test length(prof.location) == 1
+            @testset "2 sample 1 location profile" begin
+                data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0, 0xdeadbeef, 1, 1, 1, 1, 0, 0]
+                prof = load_prof_proto(pprof(data, out=tempname(), web=false))
+                @test length(prof.sample) == 2
+                @test length(prof.location) == 1
+            end
         end
     end
 end
 
 
-const HAS_META = isdefined(Profile, :has_meta)
 @testset "with_c" begin
     Profile.clear()
 
