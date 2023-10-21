@@ -191,6 +191,7 @@ end
 
 @testset "subprocess refresh" begin
 
+    PProf.kill()
     @pprof foo(10000, 5, [])
 
     current_proc = PProf.proc[]
