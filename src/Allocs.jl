@@ -223,4 +223,23 @@ function pprof(alloc_profile::Profile.Allocs.AllocResults = Profile.Allocs.fetch
     out
 end
 
+"""
+    Allocs.@pprof args...
+
+Profiles the expression using `Allocs.@profile` and starts or restarts the `Allocs.pprof()` web UI with
+default arguments. See also [`PProf.@pprof`](@ref).
+
+# Examples
+```julia
+PProf.Allocs.@pprof [randn(3) for _ in 1:100000]
+PProf.Allocs.@pprof sample_rate=1 randn(100)
+```
+"""
+macro pprof(args...)
+    esc(quote
+        $Profile.Allocs.@profile $(args...)
+        $(@__MODULE__).pprof()
+    end)
+end
+
 end  # module Allocs

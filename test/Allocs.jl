@@ -9,6 +9,23 @@ using Test
 
 const out = tempname()
 
+@testset "PProf.Allocs.@pprof" begin
+    Profile.Allocs.clear()
+    rm("alloc-profile.pb.gz", force=true)
+    @assert !isfile("alloc-profile.pb.gz")
+    PProf.Allocs.@pprof sample_rate=1.0 randn(100)
+    @test isfile("alloc-profile.pb.gz")
+
+    Profile.Allocs.clear()
+    rm("alloc-profile.pb.gz", force=true)
+    @assert !isfile("alloc-profile.pb.gz")
+    PProf.Allocs.@pprof randn(100)
+    @test isfile("alloc-profile.pb.gz")
+
+    rm("alloc-profile.pb.gz", force=true)
+end
+
+
 @testset "basic profiling" begin
     Profile.Allocs.clear()
     Profile.Allocs.@profile sample_rate=1.0 begin
