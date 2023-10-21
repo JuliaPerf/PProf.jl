@@ -99,6 +99,8 @@ end
     end
 end
 
+
+const HAS_META = isdefined(Profile, :has_meta)
 @testset "with_c" begin
     Profile.clear()
 
@@ -110,20 +112,20 @@ end
     end
     @testset for i in 1:4
         if i == 1
-            if !Profile.has_meta
+            if !HAS_META
                 continue
             end
             data = Profile.fetch(include_meta = true)
             args = (data,)
         elseif i == 2
-            if !Profile.has_meta
+            if !HAS_META
                 continue
             end
             data,lidict = Profile.retrieve(include_meta = true)
             args = (data, lidict)
         elseif i == 3
             # Ensure we are backwards compatible with older, non-meta profiles
-            if Profile.has_meta
+            if HAS_META
                 data = Profile.fetch(include_meta = false)
             else
                 data = Profile.fetch()
@@ -131,7 +133,7 @@ end
             args = (data,)
         else
             # Ensure we are backwards compatible with older, non-meta profiles
-            if Profile.has_meta
+            if HAS_META
                 data,lidict = Profile.retrieve(include_meta = false)
             else
                 data,lidict = Profile.retrieve()
