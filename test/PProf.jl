@@ -65,6 +65,44 @@ function load_prof_proto(file)
     open(io->decode(ProtoDecoder(GzipDecompressorStream(io)), PProf.perftools.profiles.Profile), file, "r")
 end
 
+const HAS_META = isdefined(Profile, :has_meta)
+@testset "Corner Cases" begin
+    @testset "non-meta profile" begin
+
+        @testset "0 sample profile" begin
+            prof = load_prof_proto(pprof(UInt64[], out=tempname(), web=false))
+            @test length(prof.sample) == 0
+        end
+        @testset "1 sample profile" begin
+            prof = load_prof_proto(pprof(UInt64[0xdeadbeef,0], out=tempname(), web=false))
+            @test length(prof.sample) == 1
+        end
+
+        @testset "2 sample, 1 location profile" begin
+            prof = load_prof_proto(pprof(UInt64[0xdeadbeef,0, 0xdeadbeef, 0], out=tempname(), web=false))
+            @test length(prof.sample) == 2
+            @test length(prof.location) == 1
+        end
+    end
+    if HAS_META
+        @testset "with-meta profile" begin
+            @testset "1 sample profile" begin
+                data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0]
+                prof = load_prof_proto(pprof(data, out=tempname(), web=false))
+                @test length(prof.sample) == 1
+            end
+
+            @testset "2 sample 1 location profile" begin
+                data = UInt64[0xdeadbeef, 1, 1, 1, 1, 0, 0, 0xdeadbeef, 1, 1, 1, 1, 0, 0]
+                prof = load_prof_proto(pprof(data, out=tempname(), web=false))
+                @test length(prof.sample) == 2
+                @test length(prof.location) == 1
+            end
+        end
+    end
+end
+
+
 @testset "with_c" begin
     Profile.clear()
 
@@ -74,12 +112,34 @@ end
         end
         sleep(2)
     end
-    for i in 1:2
+    @testset for i in 1:4
         if i == 1
-            data = Profile.fetch()
+            if !HAS_META
+                continue
+            end
+            data = Profile.fetch(include_meta = true)
+            args = (data,)
+        elseif i == 2
+            if !HAS_META
+                continue
+            end
+            data,lidict = Profile.retrieve(include_meta = true)
+            args = (data, lidict)
+        elseif i == 3
+            # Ensure we are backwards compatible with older, non-meta profiles
+            if HAS_META
+                data = Profile.fetch(include_meta = false)
+            else
+                data = Profile.fetch()
+            end
             args = (data,)
         else
-            data,lidict = Profile.retrieve()
+            # Ensure we are backwards compatible with older, non-meta profiles
+            if HAS_META
+                data,lidict = Profile.retrieve(include_meta = false)
+            else
+                data,lidict = Profile.retrieve()
+            end
             args = (data, lidict)
         end
 
@@ -135,6 +195,7 @@ end
 
 @testset "subprocess refresh" begin
 
+    PProf.kill()
     @pprof foo(10000, 5, [])
 
     current_proc = PProf.proc[]

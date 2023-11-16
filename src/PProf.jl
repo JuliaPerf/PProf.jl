@@ -19,7 +19,8 @@ clear
 
 include(joinpath("..", "lib", "perftools", "perftools.jl"))
 
-import .perftools.profiles: ValueType, Sample, Function, Location, Line
+import .perftools.profiles: ValueType, Sample, Function,
+                            Location, Line, Label
 const PProfile = perftools.profiles.Profile
 
 const proc = Ref{Union{Base.Process, Nothing}}(nothing)
@@ -96,14 +97,16 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
                ui_relative_percentages::Bool = true,
             )
+    has_meta = false
     if data === nothing
         data = if isdefined(Profile, :has_meta)
-            copy(Profile.fetch(include_meta = false))
+            has_meta = true
+            copy(Profile.fetch(include_meta = true))
         else
             copy(Profile.fetch())
         end
-    elseif isdefined(Profile, :has_meta) && Profile.has_meta(data)
-        data = Profile.strip_meta(data)
+    elseif isdefined(Profile, :has_meta)
+        has_meta = Profile.has_meta(data)
     end
     lookup = lidict
     if lookup === nothing
@@ -122,6 +125,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     enter!(string) = _enter!(string_table, string)
     enter!(::Nothing) = _enter!(string_table, "nothing")
     ValueType!(_type, unit) = ValueType(enter!(_type), enter!(unit))
+    Label!(key, value, unit) = Label(key = enter!(key), num = value, num_unit = enter!(unit))
+    Label!(key, value) = Label(key = enter!(key), str = enter!(string(value)))
 
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
@@ -136,7 +141,6 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
     sample_type = [
         ValueType!("events",      "count"), # Mandatory
-        ValueType!("stack_depth", "count")
     ]
 
     period_type = ValueType!("cpu", "nanoseconds")
@@ -144,27 +148,64 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
     # start decoding backtraces
     location_id = Vector{eltype(data)}()
-    lastwaszero = true
 
-    for ip in data
-        # ip == 0x0 is the sentinel value for finishing a backtrace, therefore finising a sample
-        if ip == 0
-            # Avoid creating empty samples
-            if lastwaszero
-                @assert length(location_id) == 0
-                continue
+    # All samples get the same value for CPU profiles.
+    value = [
+        1,      # events
+    ]
+
+    lastwaszero = true  # (Legacy: used when has_meta = false)
+
+    # The Profile data buffer is a big array, with each sample appended one after the other.
+    # Each sample now looks like this:
+    # | ip | ip | ip | meta1 | meta2 | meta3 | meta4| 0x0 | 0x0 |
+    # We iterate backwards, starting from the end, so that we don't encounter the metadata
+    # and mistake it for more ip addresses. For each sample, we skip the zeros, consume the
+    # metadata, then continue scanning the ip addresses, and when we hit another end of a
+    # block, we finish the sample we just consumed.
+    idx = length(data)
+    meta = nothing
+    while idx > 0
+        # We handle the very first sample after the loop.
+        if has_meta && Profile.is_block_end(data, idx)
+            if meta !== nothing
+                # Finish last block
+                push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
+                location_id = Vector{eltype(data)}()
             end
 
-            # End of sample
-            value = [
-                1,                   # events
-                length(location_id), # stack_depth
+            # Consume all of the metadata entries in the buffer, and then position the IP
+            # at the idx for the actual ip.
+            thread_sleeping = data[idx - Profile.META_OFFSET_SLEEPSTATE] - 1  # "Sleeping" is recorded as 1 or 2, to avoid 0s, which indicate end-of-block.
+            cpu_cycle_clock = data[idx - Profile.META_OFFSET_CPUCYCLECLOCK]
+            taskid = data[idx - Profile.META_OFFSET_TASKID]
+            threadid = data[idx - Profile.META_OFFSET_THREADID]
+
+            meta = Label[
+                Label!("thread_sleeping", thread_sleeping != 0),
+                Label!("cycle_clock", cpu_cycle_clock, "nanoseconds"),
+                Label!("taskid", taskid),
+                Label!("threadid", threadid),
             ]
-            push!(samples, Sample(;location_id, value))
-            location_id = Vector{eltype(data)}()
-            lastwaszero = true
+            idx -= (Profile.nmeta + 2)  # skip all the metas, plus the 2 nulls that end a block.
+            continue
+        elseif !has_meta && data[idx] == 0
+            # Avoid creating empty samples
+            # ip == 0x0 is the sentinel value for finishing a backtrace (when meta is disabled), therefore finising a sample
+            # On some platforms, we sometimes get two 0s in a row for some reason...
+            if lastwaszero
+                @assert length(location_id) == 0
+            else
+                # Finish last block
+                push!(samples, Sample(;location_id = reverse!(location_id), value = value))
+                location_id = Vector{eltype(data)}()
+                lastwaszero = true
+            end
+            idx -= 1
             continue
         end
+        ip = data[idx]
+        idx -= 1
         lastwaszero = false
 
         # A backtrace consists of a set of IP (Instruction Pointers), each IP points
@@ -244,6 +285,15 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             locs[ip] = location
             push!(location_id, ip)
         end
+    end
+    if length(data) > 0
+        # Finish the very last sample
+        if has_meta
+            push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
+        else
+            push!(samples, Sample(;location_id = reverse!(location_id), value = value))
+        end
+        location_id = Vector{eltype(data)}()
     end
 
     # If from_c=false funcs and locs should NOT contain C functions
