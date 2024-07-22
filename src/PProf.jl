@@ -189,7 +189,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             ]
             idx -= (Profile.nmeta + 2)  # skip all the metas, plus the 2 nulls that end a block.
             continue
-        elseif !has_meta && data[idx] == 0
+        elseif data[idx] == 0
             # Avoid creating empty samples
             # ip == 0x0 is the sentinel value for finishing a backtrace (when meta is disabled), therefore finising a sample
             # On some platforms, we sometimes get two 0s in a row for some reason...
