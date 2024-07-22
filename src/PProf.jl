@@ -275,9 +275,9 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             file = Base.find_source_file(file)
             filename = enter!(file)
             # Only keep C functions if from_c=true
-            if (from_c || !frame.from_c)
+            #if (from_c || !location_from_c)
                 funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
-            end
+            #end
         end
         locs_from_c[ip] = location_from_c
         # Only keep C frames if from_c=true
