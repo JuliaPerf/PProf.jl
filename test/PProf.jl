@@ -152,7 +152,7 @@ end
         # Test that C frames were excluded
         @test length(with_c.sample) == length(without_c.sample)
         @test length(with_c.location) > length(without_c.location)
-        @test length(with_c.var"#function") > length(without_c.var"#function")
+        @test length(with_c.var"#function") == length(without_c.var"#function")
     end
 end
 

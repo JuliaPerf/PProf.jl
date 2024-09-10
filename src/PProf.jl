@@ -189,7 +189,12 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             ]
             idx -= (Profile.nmeta + 2)  # skip all the metas, plus the 2 nulls that end a block.
             continue
-        elseif !has_meta && data[idx] == 0
+        elseif data[idx] == 0
+            if has_meta
+                # This should never happen in has_meta mode
+                @error "Unexpected 0 in data, please file an issue." idx
+                continue
+            end
             # Avoid creating empty samples
             # ip == 0x0 is the sentinel value for finishing a backtrace (when meta is disabled), therefore finising a sample
             # On some platforms, we sometimes get two 0s in a row for some reason...
@@ -274,10 +279,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             end
             file = Base.find_source_file(file)
             filename = enter!(file)
-            # Only keep C functions if from_c=true
-            if (from_c || !frame.from_c)
-                funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
-            end
+            # Decode C functions always
+            funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
         end
         locs_from_c[ip] = location_from_c
         # Only keep C frames if from_c=true
