@@ -193,6 +193,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             if has_meta
                 # This should never happen in has_meta mode
                 @error "Unexpected 0 in data, please file an issue." idx
+                idx -= 1
                 continue
             end
             # Avoid creating empty samples
