@@ -182,7 +182,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             threadid = data[idx - Profile.META_OFFSET_THREADID]
 
             meta = Label[
-                Label!("thread_sleeping", thread_sleeping != 0),
+                Label!("thread_sleeping", thread_sleeping == 1),
                 Label!("cycle_clock", cpu_cycle_clock, "nanoseconds"),
                 Label!("taskid", taskid),
                 Label!("threadid", threadid),
