@@ -29,10 +29,6 @@ PProf.Allocs.pprof()
 
 For more usage examples see the pprof docs: https://github.com/google/pprof/blob/master/doc/README.md
 
-## Dependencies
-- [Graphviz](https://www.graphviz.org/)
-    - In order to use pprof's web graph view (which is one of the best parts of pprof), you need to have graphviz installed. Click the above link to install.
-
 ## Usage
 ```julia
 help?> pprof
