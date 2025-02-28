@@ -425,7 +425,6 @@ end
         f1()
         f2() = [[] for _ in 1:5]
         f2()
-        Profile.Allocs.@profile [[] for _ in 1:5]
         @compile_workload begin
             redirect_stderr(devnull) do
                 Profile.@profile f1()
