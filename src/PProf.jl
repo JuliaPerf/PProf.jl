@@ -9,6 +9,7 @@ using CodecZlib
 import pprof_jll
 
 using Profile: clear
+using PrecompileTools: @setup_workload, @compile_workload    # this is a small dependency
 
 """
     PProf.clear()
@@ -417,9 +418,31 @@ end
 
 # Precompile as much as possible, so that profiling doesn't end up measuring our own
 # compilation.
-function __init__()
-    precompile(pprof, ()) || error("precompilation of package functions is not supposed to fail")
-    precompile(kill, ()) || error("precompilation of package functions is not supposed to fail")
-    precompile(refresh, ()) || error("precompilation of package functions is not supposed to fail")
+@static if Base.VERSION >= v"1.8.0-"
+    @setup_workload begin
+        using Profile
+        f1() = sum(collect(1:1e7))
+        f1()
+        f2() = [[] for _ in 1:5]
+        f2()
+        @compile_workload begin
+            redirect_stderr(devnull) do
+                Profile.@profile f1()
+                Profile.Allocs.@profile f2()
+                PProf.pprof(web=false)
+                PProf.Allocs.pprof(web=false)
+                PProf.refresh()
+                PProf.kill()
+            end
+        end
+    end
+else
+    function __init__()
+        @assert precompile(pprof, ()) "precompilation of package functions is not supposed to fail: pprof()"
+        # Allocs.pprof only defined in v1.9+
+        @assert precompile(refresh, ()) "precompilation of package functions is not supposed to fail: refresh()"
+        @assert precompile(kill, ()) "precompilation of package functions is not supposed to fail: kill()"
+    end
 end
+
 end # module
