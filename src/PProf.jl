@@ -255,42 +255,41 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                 funcaddr_to_id[func_addr] = func_id
             end
             push!(location.line, Line(function_id = funcaddr_to_id[func_addr], line = frame.line))
+            resolved && continue
 
-            if !resolved
-                file = nothing
-                simple_name = _escape_name_for_pprof(frame.func)
-                local full_name_with_args
-                if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
-                    linfo = frame.linfo::Core.MethodInstance
-                    meth = linfo.def
-                    file = string(meth.file)
-                    io = IOBuffer()
-                    Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
-                    full_name_with_args = _escape_name_for_pprof(String(take!(io)))
-                    start_line = convert(Int64, meth.line)
-                else
-                    # frame.linfo either nothing or CodeInfo, either way fallback
-                    file = string(frame.file)
-                    full_name_with_args = _escape_name_for_pprof(string(frame.func))
-                    start_line = convert(Int64, frame.line) # TODO: Get start_line properly
-                end
-                isempty(simple_name) && (simple_name = "[unknown function]")
-                isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
-                # WEIRD TRICK: By entering a separate copy of the string (with a
-                # different string id) for the name and system_name, pprof will use
-                # the supplied `name` *verbatim*, without pruning off the arguments.
-                # So even when full_signatures == false, we want to generate two `enter!` ids.
-                system_name = enter!(simple_name)
-                if full_signatures
-                    name = enter!(full_name_with_args)
-                else
-                    name = enter!(simple_name)
-                end
-                file = Base.find_source_file(file)
-                filename = enter!(file)
-                # Decode C functions always
-                push!(functions, Function(func_id, name, system_name, filename, start_line))
+            file = nothing
+            simple_name = _escape_name_for_pprof(frame.func)
+            local full_name_with_args
+            if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
+                linfo = frame.linfo::Core.MethodInstance
+                meth = linfo.def
+                file = string(meth.file)
+                io = IOBuffer()
+                Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
+                full_name_with_args = _escape_name_for_pprof(String(take!(io)))
+                start_line = convert(Int64, meth.line)
+            else
+                # frame.linfo either nothing or CodeInfo, either way fallback
+                file = string(frame.file)
+                full_name_with_args = _escape_name_for_pprof(string(frame.func))
+                start_line = convert(Int64, frame.line) # TODO: Get start_line properly
             end
+            isempty(simple_name) && (simple_name = "[unknown function]")
+            isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
+            # WEIRD TRICK: By entering a separate copy of the string (with a
+            # different string id) for the name and system_name, pprof will use
+            # the supplied `name` *verbatim*, without pruning off the arguments.
+            # So even when full_signatures == false, we want to generate two `enter!` ids.
+            system_name = enter!(simple_name)
+            if full_signatures
+                name = enter!(full_name_with_args)
+            else
+                name = enter!(simple_name)
+            end
+            file = Base.find_source_file(file)
+            filename = enter!(file)
+            # Decode C functions always
+            push!(functions, Function(func_id, name, system_name, filename, start_line))
         end
         locs_from_c[ip] = location_from_c
         # Only keep C frames if from_c=true
