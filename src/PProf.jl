@@ -134,9 +134,10 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     funcaddr_to_id = Dict{UInt64, Int64}()
     functions = Vector{Function}()
 
-    seen_locs = Set{UInt64}()
-    locs  = Dict{UInt64, Location}()
+    locaddr_to_id = Dict{UInt64, Int64}()
+    locations = Vector{Location}()
     locs_from_c  = Dict{UInt64, Bool}()
+
     samples = Vector{Sample}()
 
     sample_type = [
@@ -147,7 +148,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     drop_frames = isnothing(drop_frames) ? 0 : enter!(drop_frames)
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
     # start decoding backtraces
-    location_id = Vector{eltype(data)}()
+    location_id = Vector{Int64}()
 
     # All samples get the same value for CPU profiles.
     value = [
@@ -171,7 +172,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             if meta !== nothing
                 # Finish last block
                 push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
-                location_id = Vector{eltype(data)}()
+                location_id = Vector{Int64}()
             end
 
             # Consume all of the metadata entries in the buffer, and then position the IP
@@ -204,7 +205,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             else
                 # Finish last block
                 push!(samples, Sample(;location_id = reverse!(location_id), value = value))
-                location_id = Vector{eltype(data)}()
+                location_id = Vector{Int}()
                 lastwaszero = true
             end
             idx -= 1
@@ -219,17 +220,22 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # that IP to a specific frame (or set of frames, if inlining occured).
 
         # if we have already seen this IP avoid decoding it again
-        if ip in seen_locs
+        locid = get(locaddr_to_id, ip, 0)
+        seen = locid != 0
+        if !seen
+            locid = length(locations) + 1
+            locaddr_to_id[ip] = locid
+        end
+        if seen
             # Only keep C frames if from_c=true
             if (from_c || !locs_from_c[ip])
-                push!(location_id, ip)
+                push!(location_id, locid)
             end
             continue
         end
-        push!(seen_locs, ip)
 
         # Decode the IP into information about this stack frame (or frames given inlining)
-        location = Location(;id = ip, address = ip)
+        location = Location(;id = locid, address = ip)
         location_from_c = true
         # Will have multiple frames if frames were inlined (the last frame is the "real
         # function", the inlinee)
@@ -289,8 +295,9 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         locs_from_c[ip] = location_from_c
         # Only keep C frames if from_c=true
         if (from_c || !location_from_c)
-            locs[ip] = location
-            push!(location_id, ip)
+            push!(locations, location)
+            @assert length(locations) == locid
+            push!(location_id, locid)
         end
     end
     if length(data) > 0
@@ -307,7 +314,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     prof = PProfile(
         sample_type = sample_type,
         sample = samples,
-        location =  collect(values(locs)),
+        location = locations,
         var"#function" = functions,
         string_table = collect(keys(string_table)),
         drop_frames = drop_frames,
