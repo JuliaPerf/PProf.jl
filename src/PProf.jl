@@ -44,6 +44,11 @@ using Base.StackTraces: StackFrame
 # TODO:
 # - Mappings
 
+function pprof(io, data::Union{Nothing, Vector{UInt}} = nothing)
+    prof = __pprof(data; kwargs...)
+    ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+end
+
 function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
                web::Bool = true,
                webhost::AbstractString = "localhost",
@@ -57,10 +62,11 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
         @info "Writing output to $out"
     end
 
+    prof = __pprof(data; kwargs...)
     # Write to disk
     io = GzipCompressorStream(open(out, "w"))
     try
-        pprof(io, data; kwargs...)
+        ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
     finally
         close(io)
     end
@@ -114,8 +120,7 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `ui_relative_percentages`: Passes `-relative_percentages` to pprof. Causes nodes
   ignored/hidden through the web UI to be ignored from totals when computing percentages.
 """
-function pprof(io,
-               data::Union{Nothing, Vector{UInt}} = nothing,
+function __pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                lidict::Union{Nothing, Dict} = nothing;
                sampling_delay::Union{Nothing, UInt64} = nothing,
                from_c::Bool = true,
@@ -343,8 +348,7 @@ function pprof(io,
         default_sample_type = 1, # events
     )
 
-    ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
-    return nothing
+    return prof
 end
 
 function _escape_name_for_pprof(name)
