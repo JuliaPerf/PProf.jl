@@ -131,9 +131,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
-    # Functions need a uid, we'll use the pointer for the method instance
-    seen_funcs = Set{UInt64}()
-    funcs = Dict{UInt64, Function}()
+    funcaddr_to_id = Dict{UInt64, Int64}()
+    functions = Vector{Function}()
 
     seen_locs = Set{UInt64}()
     locs  = Dict{UInt64, Location}()
@@ -242,47 +241,50 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             location_from_c &= frame.from_c
 
             # Use a unique function id for the frame:
-            func_id = method_instance_id(frame)
-            push!(location.line, Line(function_id = func_id, line = frame.line))
-
-            # Known function
-            func_id in seen_funcs && continue
-            push!(seen_funcs, func_id)
-
-            # Store the function in our functions dict
-            file = nothing
-            simple_name = _escape_name_for_pprof(frame.func)
-            local full_name_with_args
-            if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
-                linfo = frame.linfo::Core.MethodInstance
-                meth = linfo.def
-                file = string(meth.file)
-                io = IOBuffer()
-                Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
-                full_name_with_args = _escape_name_for_pprof(String(take!(io)))
-                start_line = convert(Int64, meth.line)
-            else
-                # frame.linfo either nothing or CodeInfo, either way fallback
-                file = string(frame.file)
-                full_name_with_args = _escape_name_for_pprof(string(frame.func))
-                start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+            func_addr = method_instance_id(frame)
+            func_id = get(funcaddr_to_id, func_addr, 0)
+            resolved = func_id != 0
+            if !resolved
+                func_id = length(functions) + 1
+                funcaddr_to_id[func_addr] = func_id
             end
-            isempty(simple_name) && (simple_name = "[unknown function]")
-            isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
-            # WEIRD TRICK: By entering a separate copy of the string (with a
-            # different string id) for the name and system_name, pprof will use
-            # the supplied `name` *verbatim*, without pruning off the arguments.
-            # So even when full_signatures == false, we want to generate two `enter!` ids.
-            system_name = enter!(simple_name)
-            if full_signatures
-                name = enter!(full_name_with_args)
-            else
-                name = enter!(simple_name)
+            push!(location.line, Line(function_id = funcaddr_to_id[func_addr], line = frame.line))
+
+            if !resolved
+                file = nothing
+                simple_name = _escape_name_for_pprof(frame.func)
+                local full_name_with_args
+                if frame.linfo !== nothing && frame.linfo isa Core.MethodInstance
+                    linfo = frame.linfo::Core.MethodInstance
+                    meth = linfo.def
+                    file = string(meth.file)
+                    io = IOBuffer()
+                    Base.show_tuple_as_call(io, meth.name, linfo.specTypes)
+                    full_name_with_args = _escape_name_for_pprof(String(take!(io)))
+                    start_line = convert(Int64, meth.line)
+                else
+                    # frame.linfo either nothing or CodeInfo, either way fallback
+                    file = string(frame.file)
+                    full_name_with_args = _escape_name_for_pprof(string(frame.func))
+                    start_line = convert(Int64, frame.line) # TODO: Get start_line properly
+                end
+                isempty(simple_name) && (simple_name = "[unknown function]")
+                isempty(full_name_with_args) && (full_name_with_args = "[unknown function]")
+                # WEIRD TRICK: By entering a separate copy of the string (with a
+                # different string id) for the name and system_name, pprof will use
+                # the supplied `name` *verbatim*, without pruning off the arguments.
+                # So even when full_signatures == false, we want to generate two `enter!` ids.
+                system_name = enter!(simple_name)
+                if full_signatures
+                    name = enter!(full_name_with_args)
+                else
+                    name = enter!(simple_name)
+                end
+                file = Base.find_source_file(file)
+                filename = enter!(file)
+                # Decode C functions always
+                push!(functions, Function(func_id, name, system_name, filename, start_line))
             end
-            file = Base.find_source_file(file)
-            filename = enter!(file)
-            # Decode C functions always
-            funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
         end
         locs_from_c[ip] = location_from_c
         # Only keep C frames if from_c=true
@@ -306,7 +308,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         sample_type = sample_type,
         sample = samples,
         location =  collect(values(locs)),
-        var"#function" = collect(values(funcs)),
+        var"#function" = functions,
         string_table = collect(keys(string_table)),
         drop_frames = drop_frames,
         keep_frames = keep_frames,
