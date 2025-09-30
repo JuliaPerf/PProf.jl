@@ -44,6 +44,35 @@ using Base.StackTraces: StackFrame
 # TODO:
 # - Mappings
 
+function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
+               web::Bool = true,
+               webhost::AbstractString = "localhost",
+               webport::Integer = 57599,
+               out::AbstractString = "profile.pb.gz",
+               ui_relative_percentages::Bool = true,
+               kwargs...)
+    @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"
+    if !endswith(out, ".pb.gz")
+        out = "$out.pb.gz"
+        @info "Writing output to $out"
+    end
+
+    # Write to disk
+    io = open(out, "w")
+    try
+        pprof(io, data; kwargs...)
+    finally
+        close(io)
+    end
+
+    if web
+        refresh(webhost = webhost, webport = webport, file = out,
+            ui_relative_percentages = ui_relative_percentages)
+    end
+
+    return out
+end
+
 """
     pprof([data, [lidict]];
             web = true, webhost = "localhost", webport = 57599,
@@ -85,18 +114,14 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `ui_relative_percentages`: Passes `-relative_percentages` to pprof. Causes nodes
   ignored/hidden through the web UI to be ignored from totals when computing percentages.
 """
-function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
+function pprof(io,
+               data::Union{Nothing, Vector{UInt}} = nothing,
                lidict::Union{Nothing, Dict} = nothing;
                sampling_delay::Union{Nothing, UInt64} = nothing,
-               web::Bool = true,
-               webhost::AbstractString = "localhost",
-               webport::Integer = 57599,
-               out::AbstractString = "profile.pb.gz",
                from_c::Bool = true,
                full_signatures::Bool = true,
                drop_frames::Union{Nothing, AbstractString} = nothing,
                keep_frames::Union{Nothing, AbstractString} = nothing,
-               ui_relative_percentages::Bool = true,
             )
     has_meta = false
     if data === nothing
@@ -115,11 +140,6 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     end
     if sampling_delay === nothing
         sampling_delay = ccall(:jl_profile_delay_nsec, UInt64, ())
-    end
-    @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"
-    if !endswith(out, ".pb.gz")
-        out = "$out.pb.gz"
-        @info "Writing output to $out"
     end
 
     string_table = OrderedDict{AbstractString, Int64}()
@@ -323,20 +343,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         default_sample_type = 1, # events
     )
 
-    # Write to disk
-    io = GzipCompressorStream(open(out, "w"))
-    try
-        ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
-    finally
-        close(io)
-    end
-
-    if web
-        refresh(webhost = webhost, webport = webport, file = out,
-            ui_relative_percentages = ui_relative_percentages)
-    end
-
-    out
+    ProtoBuf.encode(ProtoBuf.ProtoEncoder(GzipCompressorStream(io)), prof)
+    return nothing
 end
 
 function _escape_name_for_pprof(name)
