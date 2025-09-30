@@ -44,43 +44,8 @@ using Base.StackTraces: StackFrame
 # TODO:
 # - Mappings
 
-function pprof(io, data::Union{Nothing, Vector{UInt}} = nothing)
-    prof = __pprof(data; kwargs...)
-    ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
-end
-
-function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
-               web::Bool = true,
-               webhost::AbstractString = "localhost",
-               webport::Integer = 57599,
-               out::AbstractString = "profile.pb.gz",
-               ui_relative_percentages::Bool = true,
-               kwargs...)
-    @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"
-    if !endswith(out, ".pb.gz")
-        out = "$out.pb.gz"
-        @info "Writing output to $out"
-    end
-
-    prof = __pprof(data; kwargs...)
-    # Write to disk
-    io = GzipCompressorStream(open(out, "w"))
-    try
-        ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
-    finally
-        close(io)
-    end
-
-    if web
-        refresh(webhost = webhost, webport = webport, file = out,
-            ui_relative_percentages = ui_relative_percentages)
-    end
-
-    return out
-end
-
 """
-    pprof([data, [lidict]];
+    pprof([[io], data, [lidict]];
             web = true, webhost = "localhost", webport = 57599,
             out = "profile.pb.gz", from_c = true, full_signatures = true, drop_frames = "",
             keep_frames = "", ui_relative_percentages = true, sampling_delay = nothing,
@@ -120,6 +85,43 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 - `ui_relative_percentages`: Passes `-relative_percentages` to pprof. Causes nodes
   ignored/hidden through the web UI to be ignored from totals when computing percentages.
 """
+function pprof end
+
+function pprof(io, data::Union{Nothing, Vector{UInt}} = nothing)
+    prof = __pprof(data; kwargs...)
+    ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+end
+
+function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
+               web::Bool = true,
+               webhost::AbstractString = "localhost",
+               webport::Integer = 57599,
+               out::AbstractString = "profile.pb.gz",
+               ui_relative_percentages::Bool = true,
+               kwargs...)
+    @assert !isempty(basename(out)) "`out=` must specify a file path to write to. Got unexpected: '$out'"
+    if !endswith(out, ".pb.gz")
+        out = "$out.pb.gz"
+        @info "Writing output to $out"
+    end
+
+    prof = __pprof(data; kwargs...)
+    # Write to disk
+    io = GzipCompressorStream(open(out, "w"))
+    try
+        ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+    finally
+        close(io)
+    end
+
+    if web
+        refresh(webhost = webhost, webport = webport, file = out,
+            ui_relative_percentages = ui_relative_percentages)
+    end
+
+    return out
+end
+
 function __pprof(data::Union{Nothing, Vector{UInt}} = nothing,
                lidict::Union{Nothing, Dict} = nothing;
                sampling_delay::Union{Nothing, UInt64} = nothing,
