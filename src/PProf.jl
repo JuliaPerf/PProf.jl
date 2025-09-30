@@ -58,7 +58,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
     end
 
     # Write to disk
-    io = open(out, "w")
+    io = GzipCompressorStream(open(out, "w"))
     try
         pprof(io, data; kwargs...)
     finally
@@ -343,7 +343,7 @@ function pprof(io,
         default_sample_type = 1, # events
     )
 
-    ProtoBuf.encode(ProtoBuf.ProtoEncoder(GzipCompressorStream(io)), prof)
+    ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
     return nothing
 end
 
