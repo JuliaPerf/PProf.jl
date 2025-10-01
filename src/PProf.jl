@@ -89,7 +89,12 @@ function pprof end
 
 function pprof(io, data::Union{Nothing, Vector{UInt}} = nothing; kwargs...)
     prof = __pprof(data; kwargs...)
-    ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
+    compressed_io = GzipCompressorStream(io)
+    ProtoBuf.encode(ProtoBuf.ProtoEncoder(compressed_io), prof)
+    # can't use `close(compressed_io)` since that would close the parent `io` as well
+    write(compressed_io, CodecZlib.TranscodingStreams.TOKEN_END)
+    flush(compressed_io)
+    return nothing
 end
 
 function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
