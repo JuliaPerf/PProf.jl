@@ -87,7 +87,7 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 """
 function pprof end
 
-function pprof(io, data::Union{Nothing, Vector{UInt}; kwargs...} = nothing)
+function pprof(io, data::Union{Nothing, Vector{UInt}} = nothing; kwargs...)
     prof = __pprof(data; kwargs...)
     ProtoBuf.encode(ProtoBuf.ProtoEncoder(io), prof)
 end
