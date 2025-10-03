@@ -87,7 +87,7 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 """
 function pprof end
 
-function pprof(io, 
+function pprof(io::IO, 
                data::Union{Nothing, Vector{UInt}} = nothing,
                lidict::Union{Nothing, Dict} = nothing;
                kwargs...)
