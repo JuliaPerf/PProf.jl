@@ -87,8 +87,11 @@ You can also use `PProf.refresh(file="...")` to open a new file in the server.
 """
 function pprof end
 
-function pprof(io, data::Union{Nothing, Vector{UInt}} = nothing; kwargs...)
-    prof = __pprof(data; kwargs...)
+function pprof(io, 
+               data::Union{Nothing, Vector{UInt}} = nothing,
+               lidict::Union{Nothing, Dict} = nothing;
+               kwargs...)
+    prof = __pprof(data, lidict; kwargs...)
     compressed_io = GzipCompressorStream(io)
     ProtoBuf.encode(ProtoBuf.ProtoEncoder(compressed_io), prof)
     # can't use `close(compressed_io)` since that would close the parent `io` as well
@@ -97,7 +100,8 @@ function pprof(io, data::Union{Nothing, Vector{UInt}} = nothing; kwargs...)
     return nothing
 end
 
-function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
+function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
+               lidict::Union{Nothing, Dict} = nothing;
                web::Bool = true,
                webhost::AbstractString = "localhost",
                webport::Integer = 57599,
@@ -110,7 +114,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing;
         @info "Writing output to $out"
     end
 
-    prof = __pprof(data; kwargs...)
+    prof = __pprof(data, lidict; kwargs...)
     # Write to disk
     io = GzipCompressorStream(open(out, "w"))
     try
