@@ -192,8 +192,11 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             continue
         elseif data[idx] == 0
             if has_meta
-                # This should never happen in has_meta mode
-                @error "Unexpected 0 in data, please file an issue." idx
+                # In has_meta mode, we might encounter isolated zeros when iterating backward.
+                # These are the first zero in a block-end pair (each block ends with two zeros).
+                # Profile.is_block_end(data, idx) only returns true for the second zero.
+                # When we skip (nmeta + 2) positions after processing a block end, we can land
+                # on the first zero of the next block-end pair. Just skip it silently.
                 idx -= 1
                 continue
             end
