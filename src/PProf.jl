@@ -131,13 +131,13 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
 
     # Setup:
     enter!("")  # NOTE: pprof requires first entry to be ""
-    # Functions need a uid, we'll use the pointer for the method instance
-    seen_funcs = Set{UInt64}()
-    funcs = Dict{UInt64, Function}()
+    funcaddr_to_id = Dict{UInt64, Int64}()
+    functions = Vector{Function}()
 
-    seen_locs = Set{UInt64}()
-    locs  = Dict{UInt64, Location}()
+    locaddr_to_id = Dict{UInt64, Int64}()
+    locations = Vector{Location}()
     locs_from_c  = Dict{UInt64, Bool}()
+
     samples = Vector{Sample}()
 
     sample_type = [
@@ -148,7 +148,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     drop_frames = isnothing(drop_frames) ? 0 : enter!(drop_frames)
     keep_frames = isnothing(keep_frames) ? 0 : enter!(keep_frames)
     # start decoding backtraces
-    location_id = Vector{eltype(data)}()
+    location_id = Vector{Int64}()
 
     # All samples get the same value for CPU profiles.
     value = [
@@ -172,7 +172,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             if meta !== nothing
                 # Finish last block
                 push!(samples, Sample(;location_id = reverse!(location_id), value = value, label = meta))
-                location_id = Vector{eltype(data)}()
+                location_id = Vector{Int64}()
             end
 
             # Consume all of the metadata entries in the buffer, and then position the IP
@@ -205,7 +205,7 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             else
                 # Finish last block
                 push!(samples, Sample(;location_id = reverse!(location_id), value = value))
-                location_id = Vector{eltype(data)}()
+                location_id = Vector{Int}()
                 lastwaszero = true
             end
             idx -= 1
@@ -220,17 +220,22 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
         # that IP to a specific frame (or set of frames, if inlining occured).
 
         # if we have already seen this IP avoid decoding it again
-        if ip in seen_locs
+        locid = get(locaddr_to_id, ip, 0)
+        seen = locid != 0
+        if !seen
+            locid = length(locations) + 1
+            locaddr_to_id[ip] = locid
+        end
+        if seen
             # Only keep C frames if from_c=true
             if (from_c || !locs_from_c[ip])
-                push!(location_id, ip)
+                push!(location_id, locid)
             end
             continue
         end
-        push!(seen_locs, ip)
 
         # Decode the IP into information about this stack frame (or frames given inlining)
-        location = Location(;id = ip, address = ip)
+        location = Location(;id = locid, address = ip)
         location_from_c = true
         # Will have multiple frames if frames were inlined (the last frame is the "real
         # function", the inlinee)
@@ -242,14 +247,16 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             location_from_c &= frame.from_c
 
             # Use a unique function id for the frame:
-            func_id = method_instance_id(frame)
-            push!(location.line, Line(function_id = func_id, line = frame.line))
+            func_addr = method_instance_id(frame)
+            func_id = get(funcaddr_to_id, func_addr, 0)
+            resolved = func_id != 0
+            if !resolved
+                func_id = length(functions) + 1
+                funcaddr_to_id[func_addr] = func_id
+            end
+            push!(location.line, Line(function_id = funcaddr_to_id[func_addr], line = frame.line))
+            resolved && continue
 
-            # Known function
-            func_id in seen_funcs && continue
-            push!(seen_funcs, func_id)
-
-            # Store the function in our functions dict
             file = nothing
             simple_name = _escape_name_for_pprof(frame.func)
             local full_name_with_args
@@ -282,13 +289,14 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
             file = Base.find_source_file(file)
             filename = enter!(file)
             # Decode C functions always
-            funcs[func_id] = Function(func_id, name, system_name, filename, start_line)
+            push!(functions, Function(func_id, name, system_name, filename, start_line))
         end
         locs_from_c[ip] = location_from_c
         # Only keep C frames if from_c=true
         if (from_c || !location_from_c)
-            locs[ip] = location
-            push!(location_id, ip)
+            push!(locations, location)
+            @assert length(locations) == locid
+            push!(location_id, locid)
         end
     end
     if length(data) > 0
@@ -305,8 +313,8 @@ function pprof(data::Union{Nothing, Vector{UInt}} = nothing,
     prof = PProfile(
         sample_type = sample_type,
         sample = samples,
-        location =  collect(values(locs)),
-        var"#function" = collect(values(funcs)),
+        location = locations,
+        var"#function" = functions,
         string_table = collect(keys(string_table)),
         drop_frames = drop_frames,
         keep_frames = keep_frames,
